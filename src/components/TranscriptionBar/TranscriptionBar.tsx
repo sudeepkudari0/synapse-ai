@@ -6,6 +6,8 @@ interface TranscriptionBarProps {
     onClear: () => void;
     onToggleExpand?: () => void;
     onClose?: () => void;
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
 }
 
 export function TranscriptionBar({
@@ -13,6 +15,8 @@ export function TranscriptionBar({
     onClear,
     onToggleExpand,
     onClose,
+    onMouseEnter,
+    onMouseLeave,
 }: TranscriptionBarProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -27,7 +31,11 @@ export function TranscriptionBar({
 
     return (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-40 w-[90%] max-w-5xl select-none pointer-events-none">
-            <div className="bg-black/25 backdrop-blur-xl rounded-lg shadow-2xl border border-white/20 overflow-hidden pointer-events-auto">
+            <div
+                className="bg-black/25 backdrop-blur-xl rounded-lg shadow-2xl border border-white/20 overflow-hidden pointer-events-auto"
+                onMouseEnter={onMouseEnter}
+                onMouseLeave={onMouseLeave}
+            >
                 <div className="flex items-center">
                     {/* Transcript Text - Single line, horizontal scroll */}
                     <div

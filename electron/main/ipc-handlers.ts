@@ -115,9 +115,13 @@ export function registerIPCHandlers(): void {
         try {
             const window = BrowserWindow.fromWebContents(event.sender);
             if (window) {
-                // When ignore is true, mouse events pass through transparent areas
-                // The 'forward' option allows mouse events to be forwarded to elements beneath
-                window.setIgnoreMouseEvents(ignore, { forward: true });
+                if (ignore) {
+                    // When ignoring, forward mouse events so renderer can detect mouseenter
+                    window.setIgnoreMouseEvents(true, { forward: true });
+                } else {
+                    // When NOT ignoring, accept all mouse events normally
+                    window.setIgnoreMouseEvents(false);
+                }
                 return { success: true };
             }
             return { success: false, error: 'No window found' };

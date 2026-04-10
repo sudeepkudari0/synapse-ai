@@ -1,30 +1,65 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { logger } from '../lib/logger';
+import { MicVAD, utils } from '@ricky0123/vad-web';
+import ortWasmThreadedMjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url';
+import ortWasmThreadedWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 
 interface UseMixedAudioRecorderReturn {
     isRecording: boolean;
     startRecording: () => Promise<void>;
     stopRecording: () => void;
-    audioChunks: Blob[];
     clearChunks: () => void;
 }
 
 export function useMixedAudioRecorder(
-    onDataAvailable?: (chunks: Blob[]) => void
+    onNewChunk?: (chunk: Float32Array) => void
 ): UseMixedAudioRecorderReturn {
-    const [isRecording, setIsRecording] = useState(false);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const mixedStreamRef = useRef<MediaStream | null>(null);
-    const onDataAvailableRef = useRef(onDataAvailable);
+    const LIVE_CHUNK_MS = 800;
+    const SAMPLE_RATE = 16000;
+    const LIVE_CHUNK_SAMPLES = Math.floor((SAMPLE_RATE * LIVE_CHUNK_MS) / 1000);
 
-    // Keep the ref updated with the latest callback
+    const [isRecording, setIsRecording] = useState(false);
+    const mixedStreamRef = useRef<MediaStream | null>(null);
+    const micStreamRef = useRef<MediaStream | null>(null);
+    const systemStreamRef = useRef<MediaStream | null>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const vadRef = useRef<any>(null);
+    const liveFramesRef = useRef<Float32Array[]>([]);
+    const liveSamplesRef = useRef(0);
+
+    const onNewChunkRef = useRef(onNewChunk);
+    
     useEffect(() => {
-        onDataAvailableRef.current = onDataAvailable;
-    }, [onDataAvailable]);
+        onNewChunkRef.current = onNewChunk;
+    }, [onNewChunk]);
+
+    const emitBufferedLiveChunk = useCallback((force = false) => {
+        const callback = onNewChunkRef.current;
+        if (!callback) return;
+
+        if (!force && liveSamplesRef.current < LIVE_CHUNK_SAMPLES) {
+            return;
+        }
+        if (liveSamplesRef.current === 0) {
+            return;
+        }
+
+        const chunk = new Float32Array(liveSamplesRef.current);
+        let offset = 0;
+        for (const frame of liveFramesRef.current) {
+            chunk.set(frame, offset);
+            offset += frame.length;
+        }
+
+        liveFramesRef.current = [];
+        liveSamplesRef.current = 0;
+        callback(chunk);
+    }, []);
 
     const startRecording = useCallback(async () => {
         try {
+            logger.info('Starting audio recording via VAD...');
+            const assetBasePath = import.meta.env.BASE_URL || '/';
             // Get microphone stream
             const micStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
@@ -34,109 +69,140 @@ export function useMixedAudioRecorder(
                     sampleRate: 16000,
                 },
             });
+            micStreamRef.current = micStream;
 
-            // Get desktop sources
-            const sources = await window.electronAPI.getDesktopSources();
+            let recordingStream: MediaStream = micStream;
 
-            // Use the first screen source (entire screen audio)
-            const screenSource = sources.find(s => s.type === 'screen');
-            if (!screenSource) {
-                console.warn('No screen source found, using microphone only');
-                // Fall back to mic only
-                setupRecorder(micStream);
-                return;
+            try {
+                const sources = await window.electronAPI.getDesktopSources();
+                const screenSource = sources.find((s: any) => s.type === 'screen');
+
+                if (screenSource) {
+                    logger.info(`Found screen source: ${screenSource.id}. Attempting to capture system audio...`);
+                    const systemStream = await (navigator.mediaDevices as any).getUserMedia({
+                        audio: {
+                            mandatory: {
+                                chromeMediaSource: 'desktop',
+                                chromeMediaSourceId: screenSource.id,
+                            },
+                        },
+                        video: {
+                            mandatory: {
+                                chromeMediaSource: 'desktop',
+                                chromeMediaSourceId: screenSource.id,
+                                minWidth: 1280,
+                                maxWidth: 1280,
+                                minHeight: 720,
+                                maxHeight: 720,
+                            },
+                        },
+                    });
+                    systemStreamRef.current = systemStream;
+
+                    // Mix mic + system audio
+                    const audioContext = new AudioContext({ sampleRate: 16000 });
+                    audioContextRef.current = audioContext;
+
+                    const micSource = audioContext.createMediaStreamSource(micStream);
+                    const systemSource = audioContext.createMediaStreamSource(systemStream);
+
+                    const micGain = audioContext.createGain();
+                    const systemGain = audioContext.createGain();
+                    micGain.gain.value = 1.0;
+                    systemGain.gain.value = 0.5; // system audio needs more volume usually
+
+                    const destination = audioContext.createMediaStreamDestination();
+                    micSource.connect(micGain);
+                    systemSource.connect(systemGain);
+                    micGain.connect(destination);
+                    systemGain.connect(destination);
+
+                    recordingStream = destination.stream;
+                    mixedStreamRef.current = recordingStream;
+                    logger.info('System audio capture and mixing successful.');
+                }
+            } catch (err) {
+                logger.warn('System audio unavailable, using mic only:', err);
+                mixedStreamRef.current = micStream;
             }
 
-            // Get system audio stream using Electron's desktopCapturer
-            const systemStream = await (navigator.mediaDevices as any).getUserMedia({
-                audio: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: screenSource.id,
-                    },
+            // Integration with @ricky0123/vad-web (Silero VAD)
+            // micVAD will use the recording stream to trigger onSpeechEnd
+            logger.info('Initializing Silero VAD...');
+            vadRef.current = await MicVAD.new({
+                baseAssetPath: assetBasePath,
+                onnxWASMBasePath: assetBasePath,
+                getStream: async () => recordingStream,
+                resumeStream: async () => recordingStream,
+                pauseStream: async (_stream: MediaStream) => {
+                    // Keep tracks alive during pause so resume works with the same mixed source.
                 },
-                video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: screenSource.id,
-                        minWidth: 1280,
-                        maxWidth: 1280,
-                        minHeight: 720,
-                        maxHeight: 720,
-                    },
+                ortConfig: (ort) => {
+                    ort.env.logLevel = 'error';
+                    ort.env.wasm.wasmPaths = {
+                        mjs: ortWasmThreadedMjsUrl,
+                        wasm: ortWasmThreadedWasmUrl,
+                    };
                 },
+                model: "v5",
+                positiveSpeechThreshold: 0.35,
+                negativeSpeechThreshold: 0.25,
+                minSpeechMs: 250,
+                preSpeechPadMs: 500,
+                redemptionMs: 900,
+                submitUserSpeechOnPause: true,
+                onSpeechStart: () => {
+                    logger.debug("VAD: Speech started detected");
+                },
+                onFrameProcessed: (probs: { isSpeech: number }, frame: Float32Array) => {
+                    // Low-latency path: emit small chunks continuously while speech is active.
+                    if (probs.isSpeech >= 0.25) {
+                        liveFramesRef.current.push(frame.slice());
+                        liveSamplesRef.current += frame.length;
+                        emitBufferedLiveChunk(false);
+                    } else if (liveSamplesRef.current > 0) {
+                        // On silence, flush any trailing buffered speech quickly.
+                        emitBufferedLiveChunk(true);
+                    }
+                },
+                onSpeechEnd: (_audio: Float32Array) => {
+                    logger.debug("VAD: Speech ended. Flushing live chunk buffer");
+                    emitBufferedLiveChunk(true);
+                },
+                onVADMisfire: () => {
+                    logger.debug("VAD: Misfire (speech too short)");
+                }
             });
 
-            // Create audio context for mixing
-            const audioContext = new AudioContext({ sampleRate: 16000 });
-            audioContextRef.current = audioContext;
-
-            // Create sources
-            const micSource = audioContext.createMediaStreamSource(micStream);
-            const systemSource = audioContext.createMediaStreamSource(systemStream);
-
-            // Create gain nodes for volume control
-            const micGain = audioContext.createGain();
-            const systemGain = audioContext.createGain();
-
-            // Set volumes - system audio quieter (30% volume)
-            micGain.gain.value = 1.0; // Full microphone volume
-            systemGain.gain.value = 0.3; // System audio at 30%
-
-            // Create mixer destination
-            const destination = audioContext.createMediaStreamDestination();
-
-            // Connect everything
-            micSource.connect(micGain);
-            systemSource.connect(systemGain);
-            micGain.connect(destination);
-            systemGain.connect(destination);
-
-            // Use the mixed stream
-            const mixedStream = destination.stream;
-            mixedStreamRef.current = mixedStream;
-
-            // Setup recorder with mixed stream
-            setupRecorder(mixedStream);
-
+            vadRef.current.start();
+            setIsRecording(true);
         } catch (error) {
-            console.error('Failed to start mixed recording:', error);
+            logger.error('Failed to start recording:', error);
             throw error;
         }
-
-        function setupRecorder(stream: MediaStream) {
-            const mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus',
-            });
-
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunksRef.current.push(event.data);
-
-                    // Notify parent component if callback provided - use ref to get latest version
-                    if (onDataAvailableRef.current) {
-                        onDataAvailableRef.current([...audioChunksRef.current]);
-                    }
-                }
-            };
-
-            // Start recording with timeslice (3 seconds)
-            mediaRecorder.start(3000);
-            setIsRecording(true);
-        }
-    }, []); // No dependencies needed since we use refs
+    }, []);
 
     const stopRecording = useCallback(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
+        if (vadRef.current) {
+            vadRef.current.pause();
+            vadRef.current.destroy();
+            vadRef.current = null;
         }
+        emitBufferedLiveChunk(true);
+        liveFramesRef.current = [];
+        liveSamplesRef.current = 0;
 
         if (mixedStreamRef.current) {
             mixedStreamRef.current.getTracks().forEach((track) => track.stop());
             mixedStreamRef.current = null;
+        }
+        if (micStreamRef.current) {
+            micStreamRef.current.getTracks().forEach((track) => track.stop());
+            micStreamRef.current = null;
+        }
+        if (systemStreamRef.current) {
+            systemStreamRef.current.getTracks().forEach((track) => track.stop());
+            systemStreamRef.current = null;
         }
 
         if (audioContextRef.current) {
@@ -144,19 +210,15 @@ export function useMixedAudioRecorder(
             audioContextRef.current = null;
         }
 
-        mediaRecorderRef.current = null;
         setIsRecording(false);
-    }, []);
+    }, [emitBufferedLiveChunk]);
 
-    const clearChunks = useCallback(() => {
-        audioChunksRef.current = [];
-    }, []);
+    const clearChunks = useCallback(() => {}, []);
 
     return {
         isRecording,
         startRecording,
         stopRecording,
-        audioChunks: audioChunksRef.current,
         clearChunks,
     };
 }

@@ -43,8 +43,8 @@ Provide structured, professional answers that:
                     ? `Context:\n${context}\n\nQuestion:\n${prompt}\n\nProvide a professional answer:`
                     : `Question:\n${prompt}\n\nProvide a professional answer:`;
 
-                // Call cloud LLM (OpenAI/Gemini) via IPC
-                const response = await (window as any).electron.invoke('llm:generate', {
+                // Call cloud LLM (OpenAI/Gemini)
+                const response = await window.electronAPI.llmGenerate({
                     systemPrompt,
                     prompt: fullPrompt,
                     temperature: options.temperature ?? 0.7,

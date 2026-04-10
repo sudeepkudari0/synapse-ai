@@ -63,6 +63,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         });
     },
 
+    // LLM API
+    llmGenerate: async (options: any) => {
+        return await ipcRenderer.invoke('llm:generate', options);
+    },
+
     // Window resize API
     resizeWindow: async (width: number, height: number) => {
         return await ipcRenderer.invoke(IPC_CHANNELS.RESIZE_WINDOW, width, height);

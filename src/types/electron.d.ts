@@ -35,6 +35,18 @@ interface ElectronAPI {
         extractedText?: string;
         error?: string;
     }>;
+    llmGenerate: (options: {
+        systemPrompt: string;
+        prompt: string;
+        temperature?: number;
+        maxTokens?: number;
+        stream?: boolean;
+    }) => Promise<{
+        success: boolean;
+        text?: string;
+        stream?: AsyncIterable<string>;
+        error?: string;
+    }>;
     quitApp: () => Promise<{ success: boolean; error?: string }>;
 }
 

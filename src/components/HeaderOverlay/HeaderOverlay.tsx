@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mic, MicOff, Bell, Sparkles, Monitor, MessageSquare, MoreVertical, X, ChevronUp } from 'lucide-react';
+import { Mic, MicOff, Bell, Sparkles, Monitor, MessageSquare, X, ChevronUp } from 'lucide-react';
 import { OVERLAY_WIDTH, OVERLAY_HEIGHT } from '../../constants/overlay-dimensions';
 
 interface HeaderOverlayProps {
@@ -10,6 +10,8 @@ interface HeaderOverlayProps {
     onOpenChat: () => void;
     onClose: () => void;
     sessionTime: number; // in seconds
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
 }
 
 export function HeaderOverlay({
@@ -20,6 +22,8 @@ export function HeaderOverlay({
     onOpenChat,
     onClose,
     sessionTime,
+    onMouseEnter,
+    onMouseLeave,
 }: HeaderOverlayProps) {
     const [hasNotification, setHasNotification] = useState(true);
 
@@ -44,6 +48,8 @@ export function HeaderOverlay({
                     WebkitAppRegion: 'drag',
                     cursor: 'grab',
                 } as React.CSSProperties}
+                onMouseEnter={onMouseEnter}
+                onMouseLeave={onMouseLeave}
             >
                 {/* Logo & Brand - draggable area */}
                 <div className="flex items-center gap-2 pr-3 border-r border-white/10">

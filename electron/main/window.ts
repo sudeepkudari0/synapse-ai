@@ -58,6 +58,9 @@ export function createMainWindow(): BrowserWindow {
     // Show window when ready to prevent blank/invisible window
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
+        // Enable click-through by default — transparent areas pass clicks to underlying apps.
+        // The renderer toggles this off when cursor enters interactive UI elements.
+        mainWindow.setIgnoreMouseEvents(true, { forward: true });
     });
 
     // Load the app

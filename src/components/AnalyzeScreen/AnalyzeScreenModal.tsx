@@ -4,6 +4,8 @@ import { X, Loader2, Camera, Sparkles, Monitor } from 'lucide-react';
 interface AnalyzeScreenModalProps {
     onClose: () => void;
     onAnalyze: (answer: string) => void;
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
 }
 
 interface DesktopSource {
@@ -12,7 +14,7 @@ interface DesktopSource {
     type: 'screen' | 'window';
 }
 
-export function AnalyzeScreenModal({ onClose, onAnalyze }: AnalyzeScreenModalProps) {
+export function AnalyzeScreenModal({ onClose, onAnalyze, onMouseEnter, onMouseLeave }: AnalyzeScreenModalProps) {
     const [isCapturing, setIsCapturing] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -103,6 +105,8 @@ export function AnalyzeScreenModal({ onClose, onAnalyze }: AnalyzeScreenModalPro
             className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
             style={{ pointerEvents: 'auto' }}
             onClick={handleBackdropClick}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
         >
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />

@@ -15,6 +15,8 @@ interface AnswerWindowProps {
     onNavigate: (index: number) => void;
     onClear: () => void;
     onClose: () => void;
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
 }
 
 export function AnswerWindow({
@@ -23,6 +25,8 @@ export function AnswerWindow({
     onNavigate,
     onClear,
     onClose,
+    onMouseEnter,
+    onMouseLeave,
 }: AnswerWindowProps) {
     const [position, setPosition] = useState({ x: 100, y: 150 });
     const [isDragging, setIsDragging] = useState(false);
@@ -100,6 +104,8 @@ export function AnswerWindow({
                     cursor: isDragging ? 'grabbing' : 'grab',
                 }}
                 onMouseDown={handleMouseDown}
+                onMouseEnter={onMouseEnter}
+                onMouseLeave={onMouseLeave}
             >
                 {/* Header with navigation */}
                 <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">

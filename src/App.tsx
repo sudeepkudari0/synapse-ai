@@ -26,7 +26,6 @@ const WINDOW_SIZES: Record<string, WindowSize> = {
 function App(): JSX.Element {
   // Transcription state
   const [transcript, setTranscript] = useState<string>('');
-  const lastProcessedChunkRef = useRef(0);
 
   // Q&A state
   const [qaPairs, setQAPairs] = useState<QAPair[]>([]);
@@ -36,6 +35,8 @@ function App(): JSX.Element {
   // Question detection state
   const lastTranscriptRef = useRef<string>('');
   const questionDetectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transcriptionQueueRef = useRef<Float32Array[]>([]);
+  const isTranscribingRef = useRef(false);
 
   // Session timer (in seconds)
   const [sessionTime, setSessionTime] = useState(0);
@@ -47,6 +48,24 @@ function App(): JSX.Element {
   // Hooks
   const { isModelLoading, isModelLoaded, modelError, loadModel, transcribe } = useWhisper();
   const { generateInterviewAnswer } = useLLM();
+
+  // ─── Pre-load Whisper model on app startup ───
+  useEffect(() => {
+    loadModel();
+  }, [loadModel]);
+
+  // ─── Click-through management ───
+  // The Electron window uses setIgnoreMouseEvents(true, { forward: true }) by default.
+  // This means transparent areas pass clicks to underlying apps, but mouse move/enter/leave
+  // events are still forwarded to the renderer. We listen for mouseenter on interactive
+  // elements to disable click-through, and mouseleave to re-enable it.
+  const handleMouseEnterInteractive = useCallback(() => {
+    window.electronAPI?.setIgnoreMouseEvents(false);
+  }, []);
+
+  const handleMouseLeaveInteractive = useCallback(() => {
+    window.electronAPI?.setIgnoreMouseEvents(true);
+  }, []);
 
   // Helper function to resize window based on current/future state
   // Call this BEFORE changing state to ensure window is ready
@@ -74,42 +93,57 @@ function App(): JSX.Element {
     return window.electronAPI?.resizeWindow(targetSize.width, targetSize.height);
   }, []);
 
-  // Real-time audio processing callback
-  const handleAudioData = useCallback(async (chunks: Blob[]) => {
-    if (chunks.length <= lastProcessedChunkRef.current || !isModelLoaded) {
-      return;
-    }
+  // ─── Audio chunk handler — receives individual decoded PCM chunks ───
+  const processTranscriptionQueue = useCallback(async () => {
+    if (isTranscribingRef.current) return;
+    if (!isModelLoaded) return;
 
+    isTranscribingRef.current = true;
     try {
-      const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const audioContext = new AudioContext({ sampleRate: 16000 });
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      const allAudioData = audioBuffer.getChannelData(0);
+      while (transcriptionQueueRef.current.length > 0) {
+        // Keep latency low under load by dropping older queued chunks.
+        if (transcriptionQueueRef.current.length > 2) {
+          transcriptionQueueRef.current = [transcriptionQueueRef.current[transcriptionQueueRef.current.length - 1]];
+        }
 
-      const samplesPerChunk = 48000;
-      const alreadyProcessedSamples = lastProcessedChunkRef.current * samplesPerChunk;
-      const newAudioData = allAudioData.slice(alreadyProcessedSamples);
+        const nextChunk = transcriptionQueueRef.current.shift();
+        if (!nextChunk) continue;
 
-      if (newAudioData.length === 0) {
-        lastProcessedChunkRef.current = chunks.length;
-        return;
+        try {
+          const result = await transcribe(nextChunk);
+          if (result && result.trim()) {
+            setTranscript(prev => prev ? `${prev} ${result}` : result);
+          }
+        } catch (error) {
+          console.error('Failed to transcribe chunk:', error);
+        }
       }
-
-      const result = await transcribe(newAudioData);
-      lastProcessedChunkRef.current = chunks.length;
-
-      if (result && result.trim()) {
-        setTranscript(prev => prev ? `${prev} ${result}` : result);
-      }
-    } catch (error) {
-      console.error('Failed to transcribe chunk:', error);
     } finally {
-      // Transcription complete
+      isTranscribingRef.current = false;
     }
   }, [isModelLoaded, transcribe]);
 
-  const { isRecording, startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(handleAudioData);
+  const handleAudioChunk = useCallback(async (pcmSamples: Float32Array) => {
+    if (!isModelLoaded) return;
+    transcriptionQueueRef.current.push(pcmSamples);
+    void processTranscriptionQueue();
+  }, [isModelLoaded, processTranscriptionQueue]);
+
+  const { isRecording, startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(handleAudioChunk);
+
+  // ─── Resize window when transcript first appears ───
+  const prevHadTranscript = useRef(false);
+  useEffect(() => {
+    const hasTranscript = !!transcript;
+    if (hasTranscript && !prevHadTranscript.current) {
+      // Transcript just appeared — resize window
+      resizeWindowForState({
+        hasTranscript: true,
+        hasAnswerWindow: showAnswerWindow && qaPairs.length > 0,
+      });
+    }
+    prevHadTranscript.current = hasTranscript;
+  }, [transcript, showAnswerWindow, qaPairs.length, resizeWindowForState]);
 
   // Start session timer when recording starts
   useEffect(() => {
@@ -228,11 +262,13 @@ function App(): JSX.Element {
       stopRecording();
     } else {
       try {
-        if (!isModelLoaded) {
+        // Model is pre-loaded on mount, but check just in case
+        if (!isModelLoaded && !isModelLoading) {
           await loadModel();
         }
+        transcriptionQueueRef.current = [];
+        isTranscribingRef.current = false;
         setTranscript('');
-        lastProcessedChunkRef.current = 0;
         clearChunks();
         await startRecording();
       } catch (error) {
@@ -329,7 +365,7 @@ function App(): JSX.Element {
 
 
   return (
-    <div className="h-screen w-full bg-transparent overflow-hidden">
+    <div className="h-screen w-full bg-transparent overflow-hidden pointer-events-none">
       {/* Header Overlay - Always visible */}
       <HeaderOverlay
         isRecording={isRecording}
@@ -339,6 +375,8 @@ function App(): JSX.Element {
         onOpenChat={handleOpenChat}
         onClose={handleCloseApp}
         sessionTime={sessionTime}
+        onMouseEnter={handleMouseEnterInteractive}
+        onMouseLeave={handleMouseLeaveInteractive}
       />
 
       {/* Transcription Bar - Shows when there's transcript */}
@@ -347,6 +385,8 @@ function App(): JSX.Element {
           transcript={transcript}
           onClear={handleClearTranscript}
           onClose={handleClearTranscript}
+          onMouseEnter={handleMouseEnterInteractive}
+          onMouseLeave={handleMouseLeaveInteractive}
         />
       )}
 
@@ -358,19 +398,29 @@ function App(): JSX.Element {
           onNavigate={handleNavigateQA}
           onClear={handleClearQA}
           onClose={handleCloseAnswerWindow}
+          onMouseEnter={handleMouseEnterInteractive}
+          onMouseLeave={handleMouseLeaveInteractive}
         />
       )}
 
       {/* Loading indicator */}
       {isModelLoading && (
-        <div className="fixed bottom-4 right-4 bg-[#2A2A2A] px-4 py-3 rounded-lg shadow-xl border border-white/10">
+        <div
+          className="fixed bottom-4 right-4 bg-[#2A2A2A] px-4 py-3 rounded-lg shadow-xl border border-white/10 pointer-events-auto"
+          onMouseEnter={handleMouseEnterInteractive}
+          onMouseLeave={handleMouseLeaveInteractive}
+        >
           <p className="text-white text-sm">Loading Whisper model...</p>
         </div>
       )}
 
       {/* Error display */}
       {modelError && (
-        <div className="fixed bottom-4 right-4 bg-red-500/20 border border-red-500 px-4 py-3 rounded-lg shadow-xl">
+        <div
+          className="fixed bottom-4 right-4 bg-red-500/20 border border-red-500 px-4 py-3 rounded-lg shadow-xl pointer-events-auto"
+          onMouseEnter={handleMouseEnterInteractive}
+          onMouseLeave={handleMouseLeaveInteractive}
+        >
           <p className="text-red-200 text-sm">{modelError}</p>
         </div>
       )}
@@ -380,6 +430,8 @@ function App(): JSX.Element {
         <AnalyzeScreenModal
           onClose={handleCloseAnalyzeModal}
           onAnalyze={handleAnalyzeComplete}
+          onMouseEnter={handleMouseEnterInteractive}
+          onMouseLeave={handleMouseLeaveInteractive}
         />
       )}
     </div>
