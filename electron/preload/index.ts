@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Whisper API
     whisper: {
-        loadModel: async (modelName: string = 'base.en') => {
+        loadModel: async (modelName: string = 'small.en') => {
             return await ipcRenderer.invoke(IPC_CHANNELS.WHISPER_LOAD_MODEL, modelName);
         },
 

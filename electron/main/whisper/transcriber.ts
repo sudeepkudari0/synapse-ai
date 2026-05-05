@@ -1,8 +1,8 @@
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
+import http from 'http';
 import { app } from 'electron';
-import { spawn } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 
 const isDebugEnabled = process.env.VITE_ENABLE_DEBUG_LOGS === 'true';
 function debugLog(...args: any[]) {
@@ -11,10 +11,16 @@ function debugLog(...args: any[]) {
     }
 }
 
+/** Always log important server lifecycle events regardless of debug flag. */
+function serverLog(...args: any[]) {
+    console.log('[Whisper Server]', ...args);
+}
+
 /**
- * Write a Float32Array of PCM samples to a 16-bit mono WAV file.
+ * Write a Float32Array of PCM samples to a 16-bit mono WAV file in memory
+ * and return the Buffer (avoids disk I/O for the temp file).
  */
-function writeWav(samples: Float32Array, sampleRate: number, filePath: string): void {
+function createWavBuffer(samples: Float32Array, sampleRate: number): Buffer {
     const numSamples = samples.length;
     const bytesPerSample = 2; // 16-bit PCM
     const dataSize = numSamples * bytesPerSample;
@@ -45,11 +51,11 @@ function writeWav(samples: Float32Array, sampleRate: number, filePath: string): 
         buffer.writeInt16LE(Math.round(s * 32767), 44 + i * 2);
     }
 
-    fs.writeFileSync(filePath, buffer);
+    return buffer;
 }
 
 /**
- * Resolve the base directory containing whisper.exe and models/.
+ * Resolve the base directory containing whisper binaries and models/.
  * Handles both development and packaged (electron-builder) modes.
  */
 function resolveWhisperBasePath(): string {
@@ -59,31 +65,45 @@ function resolveWhisperBasePath(): string {
     return path.join(app.getAppPath(), 'native', 'whisper');
 }
 
+// ─── Server-backed Whisper Transcriber ───────────────────────────────────────
+
+const SERVER_HOST = '127.0.0.1';
+const SERVER_PORT = 8178; // Non-standard port to avoid conflicts
+const INFERENCE_PATH = '/inference';
+const SERVER_STARTUP_TIMEOUT_MS = 30_000; // 30s to load model into GPU VRAM
+const HEALTH_POLL_INTERVAL_MS = 300;
+
 export class WhisperTranscriber {
-    private modelName = 'base.en';
-    private whisperExePath = '';
+    private modelName = 'small.en';
+    private serverExePath = '';
     private modelPath = '';
     private isInitialized = false;
+    private serverProcess: ChildProcess | null = null;
     private activeTranscription: Promise<string> | null = null;
     private transcriptionCounter = 0;
 
-    async initialize(modelName: string = 'base.en'): Promise<void> {
+    async initialize(modelName: string = 'small.en'): Promise<void> {
         // Already initialized with same model — skip.
-        if (this.isInitialized && this.modelName === modelName) {
-            debugLog(`Whisper (whisper.cpp) already initialized (${this.modelName})`);
+        if (this.isInitialized && this.modelName === modelName && this.serverProcess) {
+            debugLog(`Whisper server already running (${this.modelName})`);
             return;
+        }
+
+        // If switching models, tear down old server first.
+        if (this.serverProcess && this.modelName !== modelName) {
+            await this.dispose();
         }
 
         this.modelName = modelName;
         const basePath = resolveWhisperBasePath();
-        this.whisperExePath = path.join(basePath, 'whisper.exe');
+        this.serverExePath = path.join(basePath, 'whisper-server.exe');
         this.modelPath = path.join(basePath, 'models', `ggml-${modelName}.bin`);
 
-        // Validate binary exists
-        if (!fs.existsSync(this.whisperExePath)) {
+        // Validate server binary exists
+        if (!fs.existsSync(this.serverExePath)) {
             throw new Error(
-                `whisper.exe not found at ${this.whisperExePath}. ` +
-                `Run the setup script or place the binary in native/whisper/.`
+                `whisper-server.exe not found at ${this.serverExePath}. ` +
+                `Copy it from the whisper.cpp CUDA release into native/whisper/.`
             );
         }
 
@@ -95,149 +115,256 @@ export class WhisperTranscriber {
             );
         }
 
-        // Quick dry-run: invoke whisper.exe with --help to verify the binary is executable.
-        try {
-            await new Promise<void>((resolve, reject) => {
-                const proc = spawn(this.whisperExePath, ['--help'], {
-                    windowsHide: true,
-                    timeout: 5000,
-                });
-                proc.on('close', () => resolve());
-                proc.on('error', (err) => reject(err));
-            });
-        } catch (error) {
-            throw new Error(
-                `whisper.exe dry-run failed: ${error instanceof Error ? error.message : String(error)}`
-            );
-        }
-
+        // Start the server and wait for it to become ready
+        await this.startServer();
         this.isInitialized = true;
-        debugLog(`Whisper (whisper.cpp) initialized — binary: ${this.whisperExePath}, model: ${this.modelPath}`);
+        serverLog(`Ready — model "${modelName}" loaded on GPU, listening on ${SERVER_HOST}:${SERVER_PORT}`);
+    }
+
+    /**
+     * Launch whisper-server.exe as a background child process and wait
+     * until it is ready to accept HTTP requests.
+     */
+    private async startServer(): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            const args = [
+                '-m', this.modelPath,
+                '-l', 'en',
+                '--host', SERVER_HOST,
+                '--port', SERVER_PORT.toString(),
+                '--convert',           // let the server handle WAV conversion if needed
+                '-t', '4',             // inference threads
+                '-nt',                 // no timestamps in output
+            ];
+
+            serverLog(`Starting: whisper-server.exe ${args.join(' ')}`);
+
+            const proc = spawn(this.serverExePath, args, {
+                windowsHide: true,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+
+            this.serverProcess = proc;
+
+            // Collect stderr for debugging (whisper logs go to stderr)
+            proc.stderr?.on('data', (chunk: Buffer) => {
+                const msg = chunk.toString().trim();
+                if (msg) debugLog(`[server stderr] ${msg}`);
+            });
+
+            proc.stdout?.on('data', (chunk: Buffer) => {
+                const msg = chunk.toString().trim();
+                if (msg) debugLog(`[server stdout] ${msg}`);
+            });
+
+            proc.on('error', (err) => {
+                serverLog(`Process error: ${err.message}`);
+                this.serverProcess = null;
+                reject(new Error(`Failed to start whisper-server.exe: ${err.message}`));
+            });
+
+            proc.on('exit', (code, signal) => {
+                serverLog(`Exited (code=${code}, signal=${signal})`);
+                this.serverProcess = null;
+                this.isInitialized = false;
+            });
+
+            // Poll the server until it responds to a health check
+            const startTime = Date.now();
+
+            const pollHealth = () => {
+                if (Date.now() - startTime > SERVER_STARTUP_TIMEOUT_MS) {
+                    this.killServer();
+                    reject(new Error(
+                        `whisper-server.exe did not become ready within ${SERVER_STARTUP_TIMEOUT_MS / 1000}s. ` +
+                        `Check that the model file is valid and CUDA is working.`
+                    ));
+                    return;
+                }
+
+                // Try a simple GET to see if the server is listening
+                const req = http.get(
+                    `http://${SERVER_HOST}:${SERVER_PORT}/`,
+                    { timeout: 1000 },
+                    (res) => {
+                        // Any response (even 404) means the server is up
+                        res.resume(); // drain the response
+                        serverLog(`Server is up (startup took ${Date.now() - startTime}ms)`);
+                        resolve();
+                    }
+                );
+
+                req.on('error', () => {
+                    // Server not ready yet — retry
+                    setTimeout(pollHealth, HEALTH_POLL_INTERVAL_MS);
+                });
+
+                req.on('timeout', () => {
+                    req.destroy();
+                    setTimeout(pollHealth, HEALTH_POLL_INTERVAL_MS);
+                });
+            };
+
+            // Give the process a moment to start before first poll
+            setTimeout(pollHealth, 500);
+        });
     }
 
     async transcribe(audioData: Float32Array): Promise<string> {
-        if (!this.isInitialized) {
-            throw new Error('Whisper model not initialized. Call initialize() first.');
+        if (!this.isInitialized || !this.serverProcess) {
+            throw new Error('Whisper server not running. Call initialize() first.');
         }
 
         if (audioData.length === 0) {
             return '';
         }
 
-        // Serialize inference calls — one at a time.
+        // Serialize inference calls — one at a time to avoid overwhelming the server.
         const previous = this.activeTranscription ?? Promise.resolve('');
         const current = previous
             .catch(() => '')
-            .then(() => this.runWhisperCli(audioData));
+            .then(() => this.sendToServer(audioData));
 
         this.activeTranscription = current;
         return current;
     }
 
-    private async runWhisperCli(audioData: Float32Array): Promise<string> {
+    /**
+     * Send audio to the whisper-server via HTTP POST multipart/form-data
+     * to the /inference endpoint and return the transcribed text.
+     */
+    private async sendToServer(audioData: Float32Array): Promise<string> {
         const id = ++this.transcriptionCounter;
-        const tempDir = app.getPath('temp');
-        const tempWavPath = path.join(tempDir, `whisper_chunk_${id}_${Date.now()}.wav`);
+        const startTime = Date.now();
 
-        try {
-            const startTime = Date.now();
+        // Create WAV in memory (no disk I/O needed)
+        const wavBuffer = createWavBuffer(audioData, 16000);
 
-            // Write PCM data to a temporary WAV file
-            writeWav(audioData, 16000, tempWavPath);
+        // Build multipart/form-data payload manually (no external deps needed)
+        const boundary = `----WhisperBoundary${Date.now()}`;
+        const parts: Buffer[] = [];
 
-            // Spawn whisper.exe
-            const args = [
-                '-m', this.modelPath,
-                '-f', tempWavPath,
-                '-l', 'en',
-                '-nt',              // no timestamps
-                '-t', '4',         // threads
-                '--no-gpu',        // CPU-only build, avoid spurious GPU logs
-            ];
+        // File field: "file"
+        parts.push(Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n` +
+            `Content-Type: audio/wav\r\n\r\n`
+        ));
+        parts.push(wavBuffer);
+        parts.push(Buffer.from('\r\n'));
 
-            debugLog(`[Whisper #${id}] spawning: whisper.exe ${args.join(' ')}`);
+        // Response format field
+        parts.push(Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
+            `json\r\n`
+        ));
 
-            const text = await new Promise<string>((resolve, reject) => {
-                let stdout = '';
-                let stderr = '';
+        // Language field
+        parts.push(Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="language"\r\n\r\n` +
+            `en\r\n`
+        ));
 
-                const proc = spawn(this.whisperExePath, args, {
-                    windowsHide: true,
-                    // 30 second timeout as safety net
+        // Temperature field (0 = greedy, fastest)
+        parts.push(Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="temperature"\r\n\r\n` +
+            `0.0\r\n`
+        ));
+
+        // Closing boundary
+        parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+        const body = Buffer.concat(parts);
+
+        debugLog(`[Whisper #${id}] sending ${(wavBuffer.length / 1024).toFixed(1)} KB WAV to server...`);
+
+        const text = await new Promise<string>((resolve, reject) => {
+            const req = http.request(
+                {
+                    hostname: SERVER_HOST,
+                    port: SERVER_PORT,
+                    path: INFERENCE_PATH,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                        'Content-Length': body.length,
+                    },
                     timeout: 30_000,
-                });
-
-                proc.stdout.on('data', (chunk: Buffer) => {
-                    stdout += chunk.toString();
-                });
-
-                proc.stderr.on('data', (chunk: Buffer) => {
-                    stderr += chunk.toString();
-                });
-
-                proc.on('error', (err) => {
-                    reject(new Error(`whisper.exe process error: ${err.message}`));
-                });
-
-                proc.on('close', (code) => {
-                    if (code !== 0) {
-                        debugLog(`[Whisper #${id}] exited with code ${code}. stderr: ${stderr}`);
-                        // whisper.exe sometimes returns non-zero but still produces output
-                    }
-
-                    // Parse stdout: whisper.exe -nt outputs plain text, one line per segment.
-                    // Lines may have leading/trailing whitespace.
-                    const lines = stdout
-                        .split('\n')
-                        .map(line => line.trim())
-                        .filter(line => line.length > 0);
-
-                    // Filter out whisper system log lines (e.g. "whisper_init_from_file_with_params_no_state: ...")
-                    const transcriptLines = lines.filter(
-                        line => !line.startsWith('whisper_') &&
-                                !line.startsWith('ggml_') &&
-                                !line.startsWith('main:') &&
-                                !line.startsWith('system_info:') &&
-                                !line.startsWith('operator():')
-                    );
-
-                    const result = transcriptLines.join(' ').trim();
-                    resolve(result);
-                });
-            });
-
-            const elapsed = Date.now() - startTime;
-            const durationMs = (audioData.length / 16000) * 1000;
-            debugLog(
-                `[Whisper #${id}] transcribed in ${elapsed}ms ` +
-                `(audio: ${Math.round(durationMs)}ms, RTF: ${(elapsed / durationMs).toFixed(2)}): "${text}"`
+                },
+                (res) => {
+                    let data = '';
+                    res.on('data', (chunk) => { data += chunk; });
+                    res.on('end', () => {
+                        try {
+                            const json = JSON.parse(data);
+                            // whisper-server returns { "text": "..." } in JSON mode
+                            const result = (json.text ?? '').trim();
+                            resolve(result);
+                        } catch {
+                            // If not JSON, try to use raw text
+                            resolve(data.trim());
+                        }
+                    });
+                }
             );
 
-            return text;
-        } finally {
-            // Clean up temp WAV file
-            try {
-                if (fs.existsSync(tempWavPath)) {
-                    fs.unlinkSync(tempWavPath);
-                }
-            } catch {
-                debugLog(`[Whisper #${id}] failed to delete temp file: ${tempWavPath}`);
-            }
-        }
+            req.on('error', (err) => {
+                reject(new Error(`Whisper server request failed: ${err.message}`));
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Whisper server request timed out'));
+            });
+
+            req.write(body);
+            req.end();
+        });
+
+        const elapsed = Date.now() - startTime;
+        const durationMs = (audioData.length / 16000) * 1000;
+        debugLog(
+            `[Whisper #${id}] transcribed in ${elapsed}ms ` +
+            `(audio: ${Math.round(durationMs)}ms, RTF: ${(elapsed / durationMs).toFixed(2)}): "${text}"`
+        );
+
+        return text;
     }
 
     getStatus() {
         return {
             isLoaded: this.isInitialized,
             modelName: this.modelName,
-            backend: 'whisper-cpp-native',
+            backend: 'whisper-server-cuda',
         };
     }
 
+    private killServer(): void {
+        if (this.serverProcess) {
+            try {
+                this.serverProcess.kill('SIGTERM');
+                // On Windows, SIGTERM may not work — force kill
+                setTimeout(() => {
+                    if (this.serverProcess && !this.serverProcess.killed) {
+                        this.serverProcess.kill('SIGKILL');
+                    }
+                }, 2000);
+            } catch {
+                // Process may have already exited
+            }
+            this.serverProcess = null;
+        }
+    }
+
     async dispose(): Promise<void> {
+        serverLog('Disposing — shutting down server...');
         this.isInitialized = false;
         this.activeTranscription = null;
-        debugLog('Whisper (whisper.cpp) disposed');
+        this.killServer();
+        serverLog('Disposed');
     }
 }
 

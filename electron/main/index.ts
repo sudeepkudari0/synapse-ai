@@ -36,7 +36,13 @@ app.on('window-all-closed', () => {
     mainWindow = null;
 });
 
-// Handle app closing
-app.on('before-quit', () => {
-    // Cleanup if needed;
+// Handle app closing — kill the whisper-server background process
+app.on('before-quit', async () => {
+    try {
+        const { getTranscriber } = await import('./whisper/transcriber');
+        const transcriber = getTranscriber();
+        await transcriber.dispose();
+    } catch {
+        // Ignore cleanup errors during shutdown
+    }
 });
