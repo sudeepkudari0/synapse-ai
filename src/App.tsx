@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { HeaderOverlay } from './components/HeaderOverlay/HeaderOverlay';
 import { TranscriptionBar } from './components/TranscriptionBar/TranscriptionBar';
 import { AnswerWindow, QAPair } from './components/AnswerWindow/AnswerWindow';
@@ -6,6 +6,7 @@ import { AnalyzeScreenModal } from './components/AnalyzeScreen/AnalyzeScreenModa
 import { useWhisper } from './hooks/useWhisper';
 import { useMixedAudioRecorder } from './hooks/useMixedAudioRecorder';
 import { useLLM } from './hooks/useLLM';
+import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 import { OVERLAY_WIDTH, OVERLAY_HEIGHT } from './constants/overlay-dimensions';
 
 // Window size type
@@ -37,6 +38,7 @@ function App(): JSX.Element {
   const questionDetectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptionQueueRef = useRef<Float32Array[]>([]);
   const isTranscribingRef = useRef(false);
+  const stabilizerRef = useRef(new TranscriptStabilizer());
 
   // Session timer (in seconds)
   const [sessionTime, setSessionTime] = useState(0);
@@ -101,18 +103,14 @@ function App(): JSX.Element {
     isTranscribingRef.current = true;
     try {
       while (transcriptionQueueRef.current.length > 0) {
-        // Keep latency low under load by dropping older queued chunks.
-        if (transcriptionQueueRef.current.length > 2) {
-          transcriptionQueueRef.current = [transcriptionQueueRef.current[transcriptionQueueRef.current.length - 1]];
-        }
-
         const nextChunk = transcriptionQueueRef.current.shift();
         if (!nextChunk) continue;
 
         try {
           const result = await transcribe(nextChunk);
           if (result && result.trim()) {
-            setTranscript(prev => prev ? `${prev} ${result}` : result);
+            const fullText = stabilizerRef.current.addChunk(result);
+            setTranscript(fullText);
           }
         } catch (error) {
           console.error('Failed to transcribe chunk:', error);
@@ -268,6 +266,7 @@ function App(): JSX.Element {
         }
         transcriptionQueueRef.current = [];
         isTranscribingRef.current = false;
+        stabilizerRef.current.clear();
         setTranscript('');
         clearChunks();
         await startRecording();
@@ -283,6 +282,7 @@ function App(): JSX.Element {
       hasTranscript: false,
       hasAnswerWindow: showAnswerWindow && qaPairs.length > 0,
     });
+    stabilizerRef.current.clear();
     setTranscript('');
     lastTranscriptRef.current = '';
   };

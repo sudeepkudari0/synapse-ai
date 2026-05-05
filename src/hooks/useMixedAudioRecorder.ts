@@ -14,9 +14,13 @@ interface UseMixedAudioRecorderReturn {
 export function useMixedAudioRecorder(
     onNewChunk?: (chunk: Float32Array) => void
 ): UseMixedAudioRecorderReturn {
-    const LIVE_CHUNK_MS = 800;
+    const LIVE_CHUNK_MS = 3000;
     const SAMPLE_RATE = 16000;
     const LIVE_CHUNK_SAMPLES = Math.floor((SAMPLE_RATE * LIVE_CHUNK_MS) / 1000);
+
+    // Overlap: prepend last 1s of previous chunk to avoid word loss at boundaries
+    const OVERLAP_MS = 1000;
+    const OVERLAP_SAMPLES = Math.floor((SAMPLE_RATE * OVERLAP_MS) / 1000);
 
     const [isRecording, setIsRecording] = useState(false);
     const mixedStreamRef = useRef<MediaStream | null>(null);
@@ -26,6 +30,7 @@ export function useMixedAudioRecorder(
     const vadRef = useRef<any>(null);
     const liveFramesRef = useRef<Float32Array[]>([]);
     const liveSamplesRef = useRef(0);
+    const previousTailRef = useRef<Float32Array | null>(null);
 
     const onNewChunkRef = useRef(onNewChunk);
     
@@ -44,16 +49,35 @@ export function useMixedAudioRecorder(
             return;
         }
 
-        const chunk = new Float32Array(liveSamplesRef.current);
+        // Assemble raw chunk from buffered frames
+        const rawChunk = new Float32Array(liveSamplesRef.current);
         let offset = 0;
         for (const frame of liveFramesRef.current) {
-            chunk.set(frame, offset);
+            rawChunk.set(frame, offset);
             offset += frame.length;
         }
 
         liveFramesRef.current = [];
         liveSamplesRef.current = 0;
-        callback(chunk);
+
+        // Prepend overlap from the previous chunk so Whisper has word-boundary context
+        let finalChunk: Float32Array;
+        if (previousTailRef.current) {
+            finalChunk = new Float32Array(previousTailRef.current.length + rawChunk.length);
+            finalChunk.set(previousTailRef.current, 0);
+            finalChunk.set(rawChunk, previousTailRef.current.length);
+        } else {
+            finalChunk = rawChunk;
+        }
+
+        // Save the tail of this chunk for the next overlap
+        if (finalChunk.length > OVERLAP_SAMPLES) {
+            previousTailRef.current = finalChunk.slice(-OVERLAP_SAMPLES);
+        } else {
+            previousTailRef.current = finalChunk.slice();
+        }
+
+        callback(finalChunk);
     }, []);
 
     const startRecording = useCallback(async () => {
@@ -191,6 +215,7 @@ export function useMixedAudioRecorder(
         emitBufferedLiveChunk(true);
         liveFramesRef.current = [];
         liveSamplesRef.current = 0;
+        previousTailRef.current = null;
 
         if (mixedStreamRef.current) {
             mixedStreamRef.current.getTracks().forEach((track) => track.stop());

@@ -17,9 +17,9 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:ui": "playwright test --ui",
-    "benchmark": "bun run scripts/benchmark-whisper.ts",
-    "benchmark:latency": "bun run scripts/benchmark-whisper-latency.ts",
-    "test:llm": "bun run scripts/test-llm.ts",
+    "test:whisper-gpu": "bun run scripts/test-whisper-gpu.ts",
+    "test:whisper-benchmark": "bun run scripts/benchmark-whisper-pipeline.ts",
+    "test:whisper-stream": "bun run scripts/test-whisper-streaming.ts",
     "setup:whisper": "powershell -ExecutionPolicy Bypass -File scripts/setup-whisper.ps1"
   },
   "keywords": [
@@ -92,7 +92,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@ricky0123/vad-web": "^0.0.30",
     "@types/node": "^25.0.2",
-    "@xenova/transformers": "^2.17.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
