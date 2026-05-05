@@ -1,26 +1,28 @@
 import { BrowserWindow, app, screen } from 'electron';
 import path from 'path';
 
-// Overlay dimensions - keep in sync with src/constants/overlay-dimensions.ts
-const OVERLAY_WIDTH = 800;
-const OVERLAY_HEIGHT = 80;
+// Fixed widget dimensions — window never resizes.
+// Content visibility is controlled by CSS, not Electron setBounds().
+const WIDGET_WIDTH = 420;
+const WIDGET_HEIGHT = 600;
 
 // In CommonJS, __dirname is available natively
 declare const __dirname: string;
 
 export function createMainWindow(): BrowserWindow {
-    // Get primary display dimensions to center the window
+    // Get primary display dimensions — position top-right
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth } = primaryDisplay.workAreaSize;
 
-    // Calculate centered x position
-    const centeredX = Math.round((screenWidth - OVERLAY_WIDTH) / 2);
+    // Position: top-right corner with some margin
+    const posX = screenWidth - WIDGET_WIDTH - 24;
+    const posY = 24;
 
     const mainWindow = new BrowserWindow({
-        width: OVERLAY_WIDTH,
-        height: OVERLAY_HEIGHT,
-        x: centeredX,
-        y: 16,  // Small offset from top
+        width: WIDGET_WIDTH,
+        height: WIDGET_HEIGHT,
+        x: posX,
+        y: posY,
         frame: false,
         transparent: true,
         alwaysOnTop: true,
@@ -29,6 +31,7 @@ export function createMainWindow(): BrowserWindow {
         backgroundColor: '#00000000',
         show: false,
         focusable: true,
+        hasShadow: false,
         webPreferences: {
             preload: path.join(__dirname, '../preload/index.cjs'),
             contextIsolation: true,
@@ -42,7 +45,7 @@ export function createMainWindow(): BrowserWindow {
     const isDev = !isPackaged && process.env.NODE_ENV !== 'production';
 
     // Enable content protection (excludes from screen capture on Windows)
-    // mainWindow.setContentProtection(true);
+    mainWindow.setContentProtection(true);
 
     // Grant media permissions for audio capture
     mainWindow.webContents.session.setPermissionRequestHandler(
@@ -72,16 +75,7 @@ export function createMainWindow(): BrowserWindow {
         // In production, the path is relative to the app.asar or app folder
         const indexPath = path.join(__dirname, '../../dist/index.html');
         mainWindow.loadFile(indexPath);
-
-        // For debugging packaged app - remove this after testing
-        // Uncomment the next line if you need to debug the packaged app
-        // mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
-
-    // Log when content finishes loading (for debugging)
-    // mainWindow.webContents.on('did-finish-load', () => {
-    //     console.log('Content finished loading');
-    // });
 
     // Log any load failures
     mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {

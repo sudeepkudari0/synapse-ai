@@ -26,13 +26,17 @@ interface ElectronAPI {
     getDesktopSources: () => Promise<DesktopSource[]>;
     setIgnoreMouseEvents: (ignore: boolean) => Promise<{ success: boolean; error?: string }>;
     moveWindow: (deltaX: number, deltaY: number) => Promise<{ success: boolean; error?: string }>;
-    resizeWindow: (width: number, height: number) => Promise<{ success: boolean; error?: string }>;
     whisper: WhisperAPI;
     captureScreen: (sourceId?: string) => Promise<{ success: boolean; imageData?: string; error?: string }>;
     analyzeScreen: (imageData: string, prompt?: string, context?: string) => Promise<{
         success: boolean;
         answer?: string;
         extractedText?: string;
+        error?: string;
+    }>;
+    captureAndAnalyze: (prompt?: string) => Promise<{
+        success: boolean;
+        answer?: string;
         error?: string;
     }>;
     llmGenerate: (options: {
@@ -48,6 +52,7 @@ interface ElectronAPI {
         error?: string;
     }>;
     quitApp: () => Promise<{ success: boolean; error?: string }>;
+    onShortcut: (channel: string, callback: () => void) => () => void;
 }
 
 declare global {

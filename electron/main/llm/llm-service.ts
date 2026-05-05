@@ -2,11 +2,6 @@ import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 
 /**
- * LLM Provider types
- */
-export type LLMProvider = 'openai' | 'gemini';
-
-/**
  * LLM generation options
  */
 export interface LLMOptions {
@@ -22,128 +17,197 @@ export interface LLMOptions {
  * LLM configuration from environment
  */
 interface LLMConfig {
-    provider: LLMProvider;
-    apiKey: string;
-    model?: string;
+    geminiApiKey: string;
+    groqApiKey: string;
+    geminiModel: string;
+    groqModel: string;
 }
 
 /**
  * Cloud-based LLM Service
- * Supports OpenAI and Google Gemini APIs
+ * Tries Google Gemini first, automatically falls back to Groq on error.
  * 
  * Environment Variables:
- * - LLM_PROVIDER: 'openai' or 'gemini' (default: 'openai')
- * - OPENAI_API_KEY: Your OpenAI API key
  * - GEMINI_API_KEY: Your Google Gemini API key
- * - LLM_MODEL: Override default model
+ * - GROQ_API_KEY: Your Groq API key
+ * - GEMINI_MODEL: Override default Gemini model
+ * - GROQ_MODEL: Override default Groq model
  */
 export class LLMService {
     private config: LLMConfig;
-    private openaiClient?: OpenAI;
-    private geminiClient?: GoogleGenAI;
+    private geminiClient: GoogleGenAI;
+    private groqClient: OpenAI;
 
     // Default models
     private static readonly DEFAULT_MODELS = {
-        openai: 'gpt-4o', // Supports vision
         gemini: 'gemini-2.0-flash-exp', // Supports vision
+        groq: 'llama-3.2-90b-vision-preview', // Supports vision
     };
 
     constructor(config?: Partial<LLMConfig>) {
-        // Get configuration from environment or constructor
-        const provider = (config?.provider || process.env.LLM_PROVIDER || 'openai') as LLMProvider;
+        // Strip quotes if they exist in the env vars
+        const cleanKey = (key?: string) => key?.replace(/^["']|["']$/g, '');
+        const geminiApiKey = cleanKey(process.env.GEMINI_API_KEY);
+        const groqApiKey = cleanKey(process.env.GROQ_API_KEY);
 
-        let apiKey = config?.apiKey;
-        if (!apiKey) {
-            apiKey = provider === 'openai'
-                ? process.env.OPENAI_API_KEY
-                : process.env.GEMINI_API_KEY;
-        }
+        console.log("gemini api key", geminiApiKey);
+        console.log("groq api key", groqApiKey);
 
-        if (!apiKey) {
+        if (!geminiApiKey || !groqApiKey) {
             throw new Error(
-                `Missing API key for ${provider}. ` +
-                `Set ${provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'} environment variable.`
+                `Missing API keys. Both GEMINI_API_KEY and GROQ_API_KEY must be set in the environment. ` +
+                `Found Gemini: ${!!geminiApiKey}, Found Groq: ${!!groqApiKey}`
             );
         }
 
         this.config = {
-            provider,
-            apiKey,
-            model: config?.model || process.env.LLM_MODEL || LLMService.DEFAULT_MODELS[provider],
+            geminiApiKey,
+            groqApiKey,
+            geminiModel: process.env.GEMINI_MODEL || LLMService.DEFAULT_MODELS.gemini,
+            groqModel: process.env.GROQ_MODEL || LLMService.DEFAULT_MODELS.groq,
         };
 
-        // Initialize the appropriate client
-        this.initializeClient();
+        // Initialize Gemini
+        this.geminiClient = new GoogleGenAI({
+            apiKey: this.config.geminiApiKey,
+        });
+
+        // Initialize Groq (via OpenAI SDK pointing to GroqCloud)
+        this.groqClient = new OpenAI({
+            apiKey: this.config.groqApiKey,
+            baseURL: 'https://api.groq.com/openai/v1',
+        });
     }
 
     /**
-     * Initialize API client based on provider
-     */
-    private initializeClient(): void {
-        if (this.config.provider === 'openai') {
-            this.openaiClient = new OpenAI({
-                apiKey: this.config.apiKey,
-            });
-        } else {
-            this.geminiClient = new GoogleGenAI({
-                apiKey: this.config.apiKey,
-            });
-        }
-    }
-
-    /**
-     * Generate text using the configured LLM provider
+     * Generate text with automatic fallback from Gemini to Groq
      */
     async generate(options: LLMOptions): Promise<{ text: string; stream?: AsyncIterable<string> }> {
         if (options.stream) {
-            // Streaming response
             return {
                 text: '',
-                stream: this.streamGenerate(options),
+                stream: this.streamGenerateWithFallback(options),
             };
         } else {
-            // Non-streaming response
-            const text = await this.generateText(options);
+            const text = await this.generateTextWithFallback(options);
             return { text };
         }
     }
 
     /**
-     * Generate text (non-streaming)
+     * Non-streaming fallback mechanism
      */
-    private async generateText(options: LLMOptions): Promise<string> {
-        if (this.config.provider === 'openai') {
-            return this.generateOpenAI(options);
-        } else {
-            return this.generateGemini(options);
+    private async generateTextWithFallback(options: LLMOptions): Promise<string> {
+        try {
+            console.log('[LLMService] Trying Gemini...');
+            return await this.generateGemini(options);
+        } catch (error) {
+            console.error('[LLMService] Gemini failed:', error, '- Falling back to Groq...');
+            return await this.generateGroq(options);
         }
     }
 
     /**
-     * Generate streaming response
+     * Streaming fallback mechanism
      */
-    private async *streamGenerate(options: LLMOptions): AsyncIterable<string> {
-        if (this.config.provider === 'openai') {
-            yield* this.streamOpenAI(options);
-        } else {
-            yield* this.streamGemini(options);
+    private async *streamGenerateWithFallback(options: LLMOptions): AsyncIterable<string> {
+        try {
+            console.log('[LLMService] Trying Gemini (Stream)...');
+            const stream = this.streamGemini(options);
+            const iterator = stream[Symbol.asyncIterator]();
+            let firstResult;
+
+            // Try to fetch the first chunk to catch connection/auth/rate-limit errors
+            try {
+                firstResult = await iterator.next();
+            } catch (err) {
+                throw err; // Re-throw to trigger the Groq fallback
+            }
+
+            // If we successfully got the first chunk, yield it
+            if (!firstResult.done) {
+                yield firstResult.value;
+
+                // Then yield the rest of the stream normally
+                while (true) {
+                    const result = await iterator.next();
+                    if (result.done) break;
+                    yield result.value;
+                }
+            }
+            return; // Success with Gemini, no need for Groq
+        } catch (error) {
+            console.error('[LLMService] Gemini Stream failed:', error, '- Falling back to Groq...');
+        }
+
+        // Fallback to Groq if Gemini failed
+        console.log('[LLMService] Trying Groq (Stream)...');
+        yield* this.streamGroq(options);
+    }
+
+    // ─── Gemini Implementation ───
+
+    private async generateGemini(options: LLMOptions): Promise<string> {
+        const contentParts: any[] = [{ text: options.prompt }];
+
+        if (options.imageData) {
+            contentParts.push({
+                inlineData: {
+                    mimeType: 'image/png',
+                    data: options.imageData,
+                },
+            });
+        }
+
+        const response = await this.geminiClient.models.generateContent({
+            model: this.config.geminiModel,
+            contents: contentParts,
+            config: {
+                systemInstruction: options.systemPrompt,
+                temperature: options.temperature ?? 0.7,
+                maxOutputTokens: options.maxTokens ?? 1024,
+            },
+        });
+
+        return response.text || '';
+    }
+
+    private async *streamGemini(options: LLMOptions): AsyncIterable<string> {
+        const contentParts: any[] = [{ text: options.prompt }];
+
+        if (options.imageData) {
+            contentParts.push({
+                inlineData: {
+                    mimeType: 'image/png',
+                    data: options.imageData,
+                },
+            });
+        }
+
+        const stream = await this.geminiClient.models.generateContentStream({
+            model: this.config.geminiModel,
+            contents: contentParts,
+            config: {
+                systemInstruction: options.systemPrompt,
+                temperature: options.temperature ?? 0.7,
+                maxOutputTokens: options.maxTokens ?? 1024,
+            },
+        });
+
+        for await (const chunk of stream) {
+            if (chunk.text) {
+                yield chunk.text;
+            }
         }
     }
 
-    /**
-     * OpenAI: Non-streaming generation
-     */
-    private async generateOpenAI(options: LLMOptions): Promise<string> {
-        if (!this.openaiClient) {
-            throw new Error('OpenAI client not initialized');
-        }
+    // ─── Groq Implementation ───
 
-        // Build messages array
+    private async generateGroq(options: LLMOptions): Promise<string> {
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             { role: 'system', content: options.systemPrompt },
         ];
 
-        // If image data is provided, use vision format
         if (options.imageData) {
             messages.push({
                 role: 'user',
@@ -161,8 +225,8 @@ export class LLMService {
             messages.push({ role: 'user', content: options.prompt });
         }
 
-        const response = await this.openaiClient.chat.completions.create({
-            model: this.config.model!,
+        const response = await this.groqClient.chat.completions.create({
+            model: this.config.groqModel,
             messages,
             temperature: options.temperature ?? 0.7,
             max_tokens: options.maxTokens,
@@ -171,20 +235,11 @@ export class LLMService {
         return response.choices[0]?.message?.content || '';
     }
 
-    /**
-     * OpenAI: Streaming generation
-     */
-    private async *streamOpenAI(options: LLMOptions): AsyncIterable<string> {
-        if (!this.openaiClient) {
-            throw new Error('OpenAI client not initialized');
-        }
-
-        // Build messages array
+    private async *streamGroq(options: LLMOptions): AsyncIterable<string> {
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             { role: 'system', content: options.systemPrompt },
         ];
 
-        // If image data is provided, use vision format
         if (options.imageData) {
             messages.push({
                 role: 'user',
@@ -202,8 +257,8 @@ export class LLMService {
             messages.push({ role: 'user', content: options.prompt });
         }
 
-        const stream = await this.openaiClient.chat.completions.create({
-            model: this.config.model!,
+        const stream = await this.groqClient.chat.completions.create({
+            model: this.config.groqModel,
             messages,
             temperature: options.temperature ?? 0.7,
             max_tokens: options.maxTokens,
@@ -219,79 +274,6 @@ export class LLMService {
     }
 
     /**
-     * Gemini: Non-streaming generation
-     */
-    private async generateGemini(options: LLMOptions): Promise<string> {
-        if (!this.geminiClient) {
-            throw new Error('Gemini client not initialized');
-        }
-
-        // Build content parts
-        const contentParts: any[] = [{ text: options.prompt }];
-
-        // If image data is provided, add it as inline data
-        if (options.imageData) {
-            contentParts.push({
-                inlineData: {
-                    mimeType: 'image/png',
-                    data: options.imageData,
-                },
-            });
-        }
-
-        const response = await this.geminiClient.models.generateContent({
-            model: this.config.model!,
-            contents: contentParts,
-            config: {
-                systemInstruction: options.systemPrompt,
-                temperature: options.temperature ?? 0.7,
-                maxOutputTokens: options.maxTokens ?? 1024,
-            },
-        });
-
-        return response.text || '';
-    }
-
-    /**
-     * Gemini: Streaming generation
-     */
-    private async *streamGemini(options: LLMOptions): AsyncIterable<string> {
-        if (!this.geminiClient) {
-            throw new Error('Gemini client not initialized');
-        }
-
-        // Build content parts
-        const contentParts: any[] = [{ text: options.prompt }];
-
-        // If image data is provided, add it as inline data
-        if (options.imageData) {
-            contentParts.push({
-                inlineData: {
-                    mimeType: 'image/png',
-                    data: options.imageData,
-                },
-            });
-        }
-
-        const stream = await this.geminiClient.models.generateContentStream({
-            model: this.config.model!,
-            contents: contentParts,
-            config: {
-                systemInstruction: options.systemPrompt,
-                temperature: options.temperature ?? 0.7,
-                maxOutputTokens: options.maxTokens ?? 1024,
-            },
-        });
-
-        for await (const chunk of stream) {
-            const text = chunk.text;
-            if (text) {
-                yield text;
-            }
-        }
-    }
-
-    /**
      * Get current configuration
      */
     getConfig(): Readonly<LLMConfig> {
@@ -302,7 +284,7 @@ export class LLMService {
      * Check if the service is properly configured
      */
     isConfigured(): boolean {
-        return !!this.config.apiKey && !!this.config.model;
+        return !!this.config.geminiApiKey && !!this.config.groqApiKey;
     }
 }
 

@@ -1,6 +1,6 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, globalShortcut } from 'electron';
 import { createMainWindow } from './window';
-import { registerIPCHandlers } from './ipc-handlers';
+import { registerIPCHandlers, registerGlobalShortcuts } from './ipc-handlers';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -20,10 +20,14 @@ app.whenReady().then(() => {
     // Create main window
     mainWindow = createMainWindow();
 
+    // Register global keyboard shortcuts
+    registerGlobalShortcuts(mainWindow);
+
     app.on('activate', () => {
         // On macOS, recreate window when dock icon is clicked
         if (BrowserWindow.getAllWindows().length === 0) {
             mainWindow = createMainWindow();
+            registerGlobalShortcuts(mainWindow);
         }
     });
 });
@@ -34,6 +38,11 @@ app.on('window-all-closed', () => {
         app.quit();
     }
     mainWindow = null;
+});
+
+// Unregister shortcuts on quit
+app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
 });
 
 // Handle app closing — kill the whisper-server background process

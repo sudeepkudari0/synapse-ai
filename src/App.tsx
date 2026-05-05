@@ -1,441 +1,267 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { HeaderOverlay } from './components/HeaderOverlay/HeaderOverlay';
-import { TranscriptionBar } from './components/TranscriptionBar/TranscriptionBar';
-import { AnswerWindow, QAPair } from './components/AnswerWindow/AnswerWindow';
-import { AnalyzeScreenModal } from './components/AnalyzeScreen/AnalyzeScreenModal';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { FloatingWidget, Answer } from './components/FloatingWidget/FloatingWidget';
 import { useWhisper } from './hooks/useWhisper';
 import { useMixedAudioRecorder } from './hooks/useMixedAudioRecorder';
 import { useLLM } from './hooks/useLLM';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
-import { OVERLAY_WIDTH, OVERLAY_HEIGHT } from './constants/overlay-dimensions';
-
-// Window size type
-interface WindowSize {
-  width: number;
-  height: number;
-}
-
-// Window size configurations for different states
-const WINDOW_SIZES: Record<string, WindowSize> = {
-  headerOnly: { width: OVERLAY_WIDTH, height: OVERLAY_HEIGHT },
-  withTranscript: { width: 800, height: 150 },
-  withAnswerWindow: { width: 800, height: 600 },
-  withBoth: { width: 800, height: 700 },
-  analyzeModal: { width: 800, height: 300 },
-};
 
 function App(): JSX.Element {
-  // Transcription state
-  const [transcript, setTranscript] = useState<string>('');
+    // ─── Widget state ───
+    const [isExpanded, setIsExpanded] = useState(false);
 
-  // Q&A state
-  const [qaPairs, setQAPairs] = useState<QAPair[]>([]);
-  const [currentQAIndex, setCurrentQAIndex] = useState(0);
-  const [showAnswerWindow, setShowAnswerWindow] = useState(false);
+    // ─── Transcription state ───
+    const [transcript, setTranscript] = useState<string>('');
+    const transcriptionQueueRef = useRef<Float32Array[]>([]);
+    const isTranscribingRef = useRef(false);
+    const stabilizerRef = useRef(new TranscriptStabilizer());
 
-  // Question detection state
-  const lastTranscriptRef = useRef<string>('');
-  const questionDetectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const transcriptionQueueRef = useRef<Float32Array[]>([]);
-  const isTranscribingRef = useRef(false);
-  const stabilizerRef = useRef(new TranscriptStabilizer());
+    // ─── AI Answers state ───
+    const [answers, setAnswers] = useState<Answer[]>([]);
+    const [currentAnswerIndex, setCurrentAnswerIndex] = useState(0);
+    const [isCapturing, setIsCapturing] = useState(false);
 
-  // Session timer (in seconds)
-  const [sessionTime, setSessionTime] = useState(0);
-  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // ─── Session timer ───
+    const [sessionTime, setSessionTime] = useState(0);
+    const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Analyze screen modal state
-  const [showAnalyzeModal, setShowAnalyzeModal] = useState(false);
+    // ─── Hooks ───
+    const { isModelLoading, isModelLoaded, modelError, loadModel, transcribe } = useWhisper();
+    const { isGenerating, generateInterviewAnswer } = useLLM();
 
-  // Hooks
-  const { isModelLoading, isModelLoaded, modelError, loadModel, transcribe } = useWhisper();
-  const { generateInterviewAnswer } = useLLM();
+    // ─── Pre-load Whisper model on startup ───
+    useEffect(() => {
+        loadModel();
+    }, [loadModel]);
 
-  // ─── Pre-load Whisper model on app startup ───
-  useEffect(() => {
-    loadModel();
-  }, [loadModel]);
+    // ─── Transcription queue processing ───
+    const processTranscriptionQueue = useCallback(async () => {
+        if (isTranscribingRef.current) return;
+        if (!isModelLoaded) return;
 
-  // ─── Click-through management ───
-  // The Electron window uses setIgnoreMouseEvents(true, { forward: true }) by default.
-  // This means transparent areas pass clicks to underlying apps, but mouse move/enter/leave
-  // events are still forwarded to the renderer. We listen for mouseenter on interactive
-  // elements to disable click-through, and mouseleave to re-enable it.
-  const handleMouseEnterInteractive = useCallback(() => {
-    window.electronAPI?.setIgnoreMouseEvents(false);
-  }, []);
+        isTranscribingRef.current = true;
+        try {
+            while (transcriptionQueueRef.current.length > 0) {
+                const nextChunk = transcriptionQueueRef.current.shift();
+                if (!nextChunk) continue;
 
-  const handleMouseLeaveInteractive = useCallback(() => {
-    window.electronAPI?.setIgnoreMouseEvents(true);
-  }, []);
+                try {
+                    const result = await transcribe(nextChunk);
+                    if (result && result.trim()) {
+                        const fullText = stabilizerRef.current.addChunk(result);
+                        setTranscript(fullText);
+                    }
+                } catch (error) {
+                    console.error('Failed to transcribe chunk:', error);
+                }
+            }
+        } finally {
+            isTranscribingRef.current = false;
+        }
+    }, [isModelLoaded, transcribe]);
 
-  // Helper function to resize window based on current/future state
-  // Call this BEFORE changing state to ensure window is ready
-  const resizeWindowForState = useCallback((options: {
-    hasTranscript?: boolean;
-    hasAnswerWindow?: boolean;
-    hasAnalyzeModal?: boolean;
-  }) => {
-    const { hasTranscript = false, hasAnswerWindow = false, hasAnalyzeModal = false } = options;
+    const handleAudioChunk = useCallback(async (pcmSamples: Float32Array) => {
+        if (!isModelLoaded) return;
+        transcriptionQueueRef.current.push(pcmSamples);
+        void processTranscriptionQueue();
+    }, [isModelLoaded, processTranscriptionQueue]);
 
-    let targetSize: WindowSize;
+    const { isRecording, startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(handleAudioChunk);
 
-    if (hasAnalyzeModal) {
-      targetSize = WINDOW_SIZES.analyzeModal;
-    } else if (hasTranscript && hasAnswerWindow) {
-      targetSize = WINDOW_SIZES.withBoth;
-    } else if (hasAnswerWindow) {
-      targetSize = WINDOW_SIZES.withAnswerWindow;
-    } else if (hasTranscript) {
-      targetSize = WINDOW_SIZES.withTranscript;
-    } else {
-      targetSize = WINDOW_SIZES.headerOnly;
-    }
+    // ─── Session timer ───
+    useEffect(() => {
+        if (isRecording) {
+            sessionTimerRef.current = setInterval(() => {
+                setSessionTime(prev => prev + 1);
+            }, 1000);
+        } else {
+            if (sessionTimerRef.current) {
+                clearInterval(sessionTimerRef.current);
+                sessionTimerRef.current = null;
+            }
+        }
 
-    return window.electronAPI?.resizeWindow(targetSize.width, targetSize.height);
-  }, []);
+        return () => {
+            if (sessionTimerRef.current) {
+                clearInterval(sessionTimerRef.current);
+            }
+        };
+    }, [isRecording]);
 
-  // ─── Audio chunk handler — receives individual decoded PCM chunks ───
-  const processTranscriptionQueue = useCallback(async () => {
-    if (isTranscribingRef.current) return;
-    if (!isModelLoaded) return;
+    // ─── Action handlers ───
 
-    isTranscribingRef.current = true;
-    try {
-      while (transcriptionQueueRef.current.length > 0) {
-        const nextChunk = transcriptionQueueRef.current.shift();
-        if (!nextChunk) continue;
+    const handleToggleRecording = async () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            try {
+                if (!isModelLoaded && !isModelLoading) {
+                    await loadModel();
+                }
+                transcriptionQueueRef.current = [];
+                isTranscribingRef.current = false;
+                stabilizerRef.current.clear();
+                setTranscript('');
+                clearChunks();
+                await startRecording();
+            } catch (error) {
+                console.error('Failed to start:', error);
+            }
+        }
+    };
+
+    const handleToggleExpanded = useCallback(() => {
+        setIsExpanded(prev => !prev);
+    }, []);
+
+    const handleGenerateAnswer = async () => {
+        if (!transcript.trim()) return;
+
+        const newAnswer: Answer = {
+            id: Date.now().toString(),
+            source: 'transcript',
+            question: transcript,
+            answer: '',
+            timestamp: new Date(),
+            isStreaming: true,
+        };
+
+        setAnswers(prev => [...prev, newAnswer]);
+        setCurrentAnswerIndex(answers.length);
+        setIsExpanded(true);
 
         try {
-          const result = await transcribe(nextChunk);
-          if (result && result.trim()) {
-            const fullText = stabilizerRef.current.addChunk(result);
-            setTranscript(fullText);
-          }
+            let streamedAnswer = '';
+            await generateInterviewAnswer(
+                transcript,
+                undefined,
+                (chunk) => {
+                    streamedAnswer += chunk;
+                    setAnswers(prev =>
+                        prev.map(a =>
+                            a.id === newAnswer.id
+                                ? { ...a, answer: streamedAnswer, isStreaming: true }
+                                : a
+                        )
+                    );
+                }
+            );
+
+            // Mark streaming complete
+            setAnswers(prev =>
+                prev.map(a =>
+                    a.id === newAnswer.id
+                        ? { ...a, isStreaming: false }
+                        : a
+                )
+            );
         } catch (error) {
-          console.error('Failed to transcribe chunk:', error);
+            console.error('Failed to generate answer:', error);
+            setAnswers(prev => prev.filter(a => a.id !== newAnswer.id));
         }
-      }
-    } finally {
-      isTranscribingRef.current = false;
-    }
-  }, [isModelLoaded, transcribe]);
-
-  const handleAudioChunk = useCallback(async (pcmSamples: Float32Array) => {
-    if (!isModelLoaded) return;
-    transcriptionQueueRef.current.push(pcmSamples);
-    void processTranscriptionQueue();
-  }, [isModelLoaded, processTranscriptionQueue]);
-
-  const { isRecording, startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(handleAudioChunk);
-
-  // ─── Resize window when transcript first appears ───
-  const prevHadTranscript = useRef(false);
-  useEffect(() => {
-    const hasTranscript = !!transcript;
-    if (hasTranscript && !prevHadTranscript.current) {
-      // Transcript just appeared — resize window
-      resizeWindowForState({
-        hasTranscript: true,
-        hasAnswerWindow: showAnswerWindow && qaPairs.length > 0,
-      });
-    }
-    prevHadTranscript.current = hasTranscript;
-  }, [transcript, showAnswerWindow, qaPairs.length, resizeWindowForState]);
-
-  // Start session timer when recording starts
-  useEffect(() => {
-    if (isRecording) {
-      sessionTimerRef.current = setInterval(() => {
-        setSessionTime(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (sessionTimerRef.current) {
-        clearInterval(sessionTimerRef.current);
-        sessionTimerRef.current = null;
-      }
-    }
-
-    return () => {
-      if (sessionTimerRef.current) {
-        clearInterval(sessionTimerRef.current);
-      }
-    };
-  }, [isRecording]);
-
-  // Question detection: Detect when user stops talking (2 second pause)
-  useEffect(() => {
-    if (transcript === lastTranscriptRef.current) return;
-
-    // Clear existing timer
-    if (questionDetectionTimerRef.current) {
-      clearTimeout(questionDetectionTimerRef.current);
-    }
-
-    // Set new timer to detect question after 2 seconds of silence
-    questionDetectionTimerRef.current = setTimeout(() => {
-      if (transcript && transcript !== lastTranscriptRef.current) {
-        // Detect if transcript ends with question mark or contains question words
-        const isQuestion =
-          transcript.endsWith('?') ||
-          /\b(what|how|why|when|where|who|tell me|describe|explain|can you)\b/i.test(transcript);
-
-        if (isQuestion) {
-          handleGenerateAnswer(transcript);
-        }
-      }
-      lastTranscriptRef.current = transcript;
-    }, 2000);
-
-    return () => {
-      if (questionDetectionTimerRef.current) {
-        clearTimeout(questionDetectionTimerRef.current);
-      }
-    };
-  }, [transcript]);
-
-  // Generate AI answer for detected question
-  const handleGenerateAnswer = async (question: string) => {
-    if (!question.trim()) return;
-
-    // Resize window BEFORE showing the answer window
-    await resizeWindowForState({
-      hasTranscript: !!transcript,
-      hasAnswerWindow: true,
-    });
-
-    // Create new Q&A pair with streaming placeholder
-    const newQA: QAPair = {
-      id: Date.now().toString(),
-      question,
-      answer: '',
-      timestamp: new Date(),
-      isStreaming: true,
     };
 
-    setQAPairs(prev => [...prev, newQA]);
-    setCurrentQAIndex(qaPairs.length);
-    setShowAnswerWindow(true);
+    const handleCaptureScreen = async () => {
+        setIsCapturing(true);
 
-    try {
-      // Stream the answer
-      let streamedAnswer = '';
-      await generateInterviewAnswer(
-        question,
-        undefined, // TODO: Add resume context
-        (chunk) => {
-          streamedAnswer += chunk;
-          // Update the Q&A pair with streamed content
-          setQAPairs(prev =>
-            prev.map(qa =>
-              qa.id === newQA.id
-                ? { ...qa, answer: streamedAnswer, isStreaming: true }
-                : qa
-            )
-          );
+        try {
+            const result = await window.electronAPI.captureAndAnalyze();
+
+            if (result.success && result.answer) {
+                const newAnswer: Answer = {
+                    id: Date.now().toString(),
+                    source: 'screen-capture',
+                    question: 'Screen Analysis',
+                    answer: result.answer,
+                    timestamp: new Date(),
+                    isStreaming: false,
+                };
+
+                setAnswers(prev => [...prev, newAnswer]);
+                setCurrentAnswerIndex(answers.length);
+                setIsExpanded(true);
+            } else {
+                console.error('Screen capture failed:', result.error);
+            }
+        } catch (error) {
+            console.error('Failed to capture screen:', error);
+        } finally {
+            setIsCapturing(false);
         }
-      );
+    };
 
-      // Mark streaming as complete
-      setQAPairs(prev =>
-        prev.map(qa =>
-          qa.id === newQA.id
-            ? { ...qa, isStreaming: false }
-            : qa
-        )
-      );
-
-      // Clear the question transcript after generating answer
-      setTranscript('');
-    } catch (error) {
-      console.error('Failed to generate answer:', error);
-      // Remove failed Q&A
-      setQAPairs(prev => prev.filter(qa => qa.id !== newQA.id));
-    }
-  };
-
-  // Handler functions
-  const handleToggleRecording = async () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      try {
-        // Model is pre-loaded on mount, but check just in case
-        if (!isModelLoaded && !isModelLoading) {
-          await loadModel();
-        }
-        transcriptionQueueRef.current = [];
-        isTranscribingRef.current = false;
+    const handleClearTranscript = () => {
         stabilizerRef.current.clear();
         setTranscript('');
-        clearChunks();
-        await startRecording();
-      } catch (error) {
-        console.error('Failed to start:', error);
-      }
-    }
-  };
-
-  const handleClearTranscript = async () => {
-    // Resize window based on what will remain visible
-    await resizeWindowForState({
-      hasTranscript: false,
-      hasAnswerWindow: showAnswerWindow && qaPairs.length > 0,
-    });
-    stabilizerRef.current.clear();
-    setTranscript('');
-    lastTranscriptRef.current = '';
-  };
-
-  const handleClearQA = async () => {
-    // Resize window before hiding answer window
-    await resizeWindowForState({
-      hasTranscript: !!transcript,
-      hasAnswerWindow: false,
-    });
-    setQAPairs([]);
-    setCurrentQAIndex(0);
-    setShowAnswerWindow(false);
-  };
-
-  const handleNavigateQA = (index: number) => {
-    setCurrentQAIndex(Math.max(0, Math.min(index, qaPairs.length - 1)));
-  };
-
-  const handleAIHelp = () => {
-    // Manual trigger for AI help
-    if (transcript) {
-      handleGenerateAnswer(transcript);
-    }
-  };
-
-  const handleAnalyzeScreen = async () => {
-    // Resize window BEFORE showing the modal
-    await resizeWindowForState({ hasAnalyzeModal: true });
-    setShowAnalyzeModal(true);
-  };
-
-  const handleCloseAnalyzeModal = async () => {
-    // Resize window back based on current visible content
-    await resizeWindowForState({
-      hasTranscript: !!transcript,
-      hasAnswerWindow: showAnswerWindow && qaPairs.length > 0,
-    });
-    setShowAnalyzeModal(false);
-  };
-
-  const handleAnalyzeComplete = async (answer: string) => {
-    // Resize for answer window (modal will close, so we need answer window size)
-    await resizeWindowForState({
-      hasTranscript: !!transcript,
-      hasAnswerWindow: true,
-    });
-
-    // Create a new Q&A pair from the analyzed screen
-    const newQA: QAPair = {
-      id: Date.now().toString(),
-      question: 'Screen Analysis',
-      answer,
-      timestamp: new Date(),
-      isStreaming: false,
     };
 
-    setQAPairs(prev => [...prev, newQA]);
-    setCurrentQAIndex(qaPairs.length);
-    setShowAnswerWindow(true);
-  };
+    const handleClearAnswers = () => {
+        setAnswers([]);
+        setCurrentAnswerIndex(0);
+    };
 
-  const handleOpenChat = () => {
-    // TODO: Implement chat interface
-  };
+    const handleNavigateAnswer = (index: number) => {
+        setCurrentAnswerIndex(Math.max(0, Math.min(index, answers.length - 1)));
+    };
 
-  const handleCloseAnswerWindow = async () => {
-    // Resize window before hiding answer window
-    await resizeWindowForState({
-      hasTranscript: !!transcript,
-      hasAnswerWindow: false,
-    });
-    setShowAnswerWindow(false);
-  };
+    const handleClose = () => {
+        window.electronAPI?.quitApp();
+    };
 
-  const handleCloseApp = () => {
-    window.electronAPI?.quitApp();
-  };
+    // ─── Global keyboard shortcuts ───
+    useEffect(() => {
+        const unsubscribers: (() => void)[] = [];
 
+        if (window.electronAPI?.onShortcut) {
+            unsubscribers.push(
+                window.electronAPI.onShortcut('shortcut:capture-screen', () => {
+                    handleCaptureScreen();
+                })
+            );
+            unsubscribers.push(
+                window.electronAPI.onShortcut('shortcut:generate-answer', () => {
+                    handleGenerateAnswer();
+                })
+            );
+            unsubscribers.push(
+                window.electronAPI.onShortcut('shortcut:toggle-widget', () => {
+                    handleToggleExpanded();
+                })
+            );
+            unsubscribers.push(
+                window.electronAPI.onShortcut('shortcut:toggle-recording', () => {
+                    handleToggleRecording();
+                })
+            );
+        }
 
+        return () => {
+            unsubscribers.forEach(unsub => unsub());
+        };
+    }, [transcript, answers.length]); // Re-subscribe when these change so handlers have fresh closures
 
-  return (
-    <div className="h-screen w-full bg-transparent overflow-hidden pointer-events-none">
-      {/* Header Overlay - Always visible */}
-      <HeaderOverlay
-        isRecording={isRecording}
-        onToggleRecording={handleToggleRecording}
-        onAIHelp={handleAIHelp}
-        onAnalyzeScreen={handleAnalyzeScreen}
-        onOpenChat={handleOpenChat}
-        onClose={handleCloseApp}
-        sessionTime={sessionTime}
-        onMouseEnter={handleMouseEnterInteractive}
-        onMouseLeave={handleMouseLeaveInteractive}
-      />
-
-      {/* Transcription Bar - Shows when there's transcript */}
-      {transcript && (
-        <TranscriptionBar
-          transcript={transcript}
-          onClear={handleClearTranscript}
-          onClose={handleClearTranscript}
-          onMouseEnter={handleMouseEnterInteractive}
-          onMouseLeave={handleMouseLeaveInteractive}
+    // ─── Render ───
+    return (
+        <FloatingWidget
+            isExpanded={isExpanded}
+            isRecording={isRecording}
+            isCapturing={isCapturing}
+            isGenerating={isGenerating}
+            sessionTime={sessionTime}
+            transcript={transcript}
+            answers={answers}
+            currentAnswerIndex={currentAnswerIndex}
+            isModelLoading={isModelLoading}
+            modelError={modelError}
+            onToggleExpanded={handleToggleExpanded}
+            onToggleRecording={handleToggleRecording}
+            onCaptureScreen={handleCaptureScreen}
+            onGenerateAnswer={handleGenerateAnswer}
+            onClearTranscript={handleClearTranscript}
+            onClearAnswers={handleClearAnswers}
+            onNavigateAnswer={handleNavigateAnswer}
+            onClose={handleClose}
         />
-      )}
-
-      {/* Answer Window - Shows when there are Q&A pairs */}
-      {showAnswerWindow && qaPairs.length > 0 && (
-        <AnswerWindow
-          qaPairs={qaPairs}
-          currentIndex={currentQAIndex}
-          onNavigate={handleNavigateQA}
-          onClear={handleClearQA}
-          onClose={handleCloseAnswerWindow}
-          onMouseEnter={handleMouseEnterInteractive}
-          onMouseLeave={handleMouseLeaveInteractive}
-        />
-      )}
-
-      {/* Loading indicator */}
-      {isModelLoading && (
-        <div
-          className="fixed bottom-4 right-4 bg-[#2A2A2A] px-4 py-3 rounded-lg shadow-xl border border-white/10 pointer-events-auto"
-          onMouseEnter={handleMouseEnterInteractive}
-          onMouseLeave={handleMouseLeaveInteractive}
-        >
-          <p className="text-white text-sm">Loading Whisper model...</p>
-        </div>
-      )}
-
-      {/* Error display */}
-      {modelError && (
-        <div
-          className="fixed bottom-4 right-4 bg-red-500/20 border border-red-500 px-4 py-3 rounded-lg shadow-xl pointer-events-auto"
-          onMouseEnter={handleMouseEnterInteractive}
-          onMouseLeave={handleMouseLeaveInteractive}
-        >
-          <p className="text-red-200 text-sm">{modelError}</p>
-        </div>
-      )}
-
-      {/* Analyze Screen Modal */}
-      {showAnalyzeModal && (
-        <AnalyzeScreenModal
-          onClose={handleCloseAnalyzeModal}
-          onAnalyze={handleAnalyzeComplete}
-          onMouseEnter={handleMouseEnterInteractive}
-          onMouseLeave={handleMouseLeaveInteractive}
-        />
-      )}
-    </div>
-  );
+    );
 }
 
 export default App;

@@ -10,7 +10,7 @@ const IPC_CHANNELS = {
     MOVE_WINDOW: 'window:move',
     CAPTURE_SCREEN: 'screen:capture',
     ANALYZE_SCREEN: 'screen:analyze',
-    RESIZE_WINDOW: 'window:resize',
+    CAPTURE_AND_ANALYZE: 'screen:capture-and-analyze',
     QUIT_APP: 'app:quit',
 } as const;
 
@@ -63,21 +63,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
         });
     },
 
+    // One-shot capture + analyze (no UI needed)
+    captureAndAnalyze: async (prompt?: string) => {
+        return await ipcRenderer.invoke(IPC_CHANNELS.CAPTURE_AND_ANALYZE, prompt);
+    },
+
     // LLM API
     llmGenerate: async (options: any) => {
         return await ipcRenderer.invoke('llm:generate', options);
-    },
-
-    // Window resize API
-    resizeWindow: async (width: number, height: number) => {
-        return await ipcRenderer.invoke(IPC_CHANNELS.RESIZE_WINDOW, width, height);
     },
 
     // App control API
     quitApp: async () => {
         return await ipcRenderer.invoke(IPC_CHANNELS.QUIT_APP);
     },
+
+    // Shortcut listeners — renderer subscribes to global shortcut events
+    onShortcut: (channel: string, callback: () => void) => {
+        const validChannels = [
+            'shortcut:capture-screen',
+            'shortcut:generate-answer',
+            'shortcut:toggle-widget',
+            'shortcut:toggle-recording',
+        ];
+        if (validChannels.includes(channel)) {
+            ipcRenderer.on(channel, callback);
+            return () => ipcRenderer.removeListener(channel, callback);
+        }
+        return () => {};
+    },
 });
-
-
-

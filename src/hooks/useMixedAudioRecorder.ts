@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { logger } from '../lib/logger';
-import { MicVAD, utils } from '@ricky0123/vad-web';
+import { MicVAD } from '@ricky0123/vad-web';
 import ortWasmThreadedMjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url';
 import ortWasmThreadedWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 

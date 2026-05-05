@@ -1,4 +1,4 @@
-import { ipcMain, app } from 'electron';
+import { ipcMain, app, globalShortcut } from 'electron';
 import { getTranscriber } from './whisper/transcriber';
 import { IPC_CHANNELS } from '../types/ipc';
 import { BrowserWindow } from 'electron';
@@ -110,7 +110,7 @@ export function registerIPCHandlers(): void {
         }
     });
 
-    // // Window: Set ignore mouse events (for click-through behavior)
+    // Window: Set ignore mouse events (for click-through behavior)
     ipcMain.handle(IPC_CHANNELS.SET_IGNORE_MOUSE_EVENTS, async (event, ignore: boolean) => {
         try {
             const window = BrowserWindow.fromWebContents(event.sender);
@@ -222,32 +222,41 @@ Be clear, structured, and helpful.`;
         }
     });
 
-    // Window: Resize window (for modals and overlays)
-    ipcMain.handle(IPC_CHANNELS.RESIZE_WINDOW, async (event, width: number, height: number) => {
+    // Screen: One-shot capture + analyze (no UI interaction needed)
+    ipcMain.handle(IPC_CHANNELS.CAPTURE_AND_ANALYZE, async (event, prompt?: string) => {
         try {
-            const window = BrowserWindow.fromWebContents(event.sender);
-            if (window) {
-                const { screen } = await import('electron');
-                const primaryDisplay = screen.getPrimaryDisplay();
-                const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+            const { captureScreen } = await import('./screen-capture');
+            const { getLLMService } = await import('./llm/llm-service');
 
-                // Calculate centered position for the new size
-                const newX = Math.round((screenWidth - width) / 2);
-                const newY = Math.round((screenHeight - height) / 2);
+            // Step 1: Capture primary screen
+            const imageData = await captureScreen();
 
-                // Set both size and position
-                window.setBounds({
-                    x: newX,
-                    y: Math.max(16, newY), // Keep at least 16px from top
-                    width: width,
-                    height: height,
-                });
+            // Step 2: Analyze with LLM vision
+            const llmService = getLLMService();
+            const systemPrompt = `You are an expert coding and interview assistant. Analyze the screenshot and provide a clear, structured response.
+If you see code: explain it, identify bugs, suggest fixes, and provide the corrected version.
+If you see a question: provide a professional, comprehensive answer.
+If you see a DSA problem: explain the approach, provide the solution with time/space complexity.
+Be concise but thorough. Use bullet points and code blocks where appropriate.`;
 
-                return { success: true };
-            }
-            return { success: false, error: 'No window found' };
+            const userPrompt = prompt ||
+                'Analyze this screenshot. If it contains code, explain and debug it. If it contains a question or problem, provide a clear answer or solution.';
+
+            const result = await llmService.generate({
+                systemPrompt,
+                prompt: userPrompt,
+                imageData,
+                temperature: 0.5,
+                maxTokens: 2048,
+                stream: false,
+            });
+
+            return {
+                success: true,
+                answer: result.text,
+            };
         } catch (error) {
-            console.error('IPC: Failed to resize window:', error);
+            console.error('IPC: Capture-and-analyze failed:', error);
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error',
@@ -268,5 +277,30 @@ Be clear, structured, and helpful.`;
             };
         }
     });
+}
 
+/**
+ * Register global keyboard shortcuts.
+ * Called after the main window is created.
+ */
+export function registerGlobalShortcuts(mainWindow: BrowserWindow): void {
+    // Ctrl+Shift+S → Capture screen + analyze
+    globalShortcut.register('CommandOrControl+Shift+S', () => {
+        mainWindow.webContents.send('shortcut:capture-screen');
+    });
+
+    // Ctrl+Shift+G → Generate answer from transcript
+    globalShortcut.register('CommandOrControl+Shift+G', () => {
+        mainWindow.webContents.send('shortcut:generate-answer');
+    });
+
+    // Ctrl+Shift+H → Toggle collapsed/expanded
+    globalShortcut.register('CommandOrControl+Shift+H', () => {
+        mainWindow.webContents.send('shortcut:toggle-widget');
+    });
+
+    // Ctrl+Shift+R → Toggle recording
+    globalShortcut.register('CommandOrControl+Shift+R', () => {
+        mainWindow.webContents.send('shortcut:toggle-recording');
+    });
 }
