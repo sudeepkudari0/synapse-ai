@@ -1,9 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { FloatingWidget, Answer } from './components/FloatingWidget/FloatingWidget';
 import { useWhisper } from './hooks/useWhisper';
-import { useMixedAudioRecorder } from './hooks/useMixedAudioRecorder';
+import { useMixedAudioRecorder, SpeakerSource } from './hooks/useMixedAudioRecorder';
 import { useLLM } from './hooks/useLLM';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
+
+export interface ChatBlock {
+    id: string;
+    speaker: SpeakerSource;
+    text: string;
+    timestamp: Date;
+}
 
 function App(): JSX.Element {
     // ─── Widget state ───
@@ -11,15 +18,25 @@ function App(): JSX.Element {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     // ─── Transcription state ───
-    const [transcript, setTranscript] = useState<string>('');
-    const transcriptionQueueRef = useRef<Float32Array[]>([]);
+    const [conversation, setConversation] = useState<ChatBlock[]>([]);
+    const transcriptionQueueRef = useRef<{source: SpeakerSource, chunk: Float32Array}[]>([]);
     const isTranscribingRef = useRef(false);
-    const stabilizerRef = useRef(new TranscriptStabilizer());
+    
+    const userStabilizerRef = useRef(new TranscriptStabilizer());
+    const interviewerStabilizerRef = useRef(new TranscriptStabilizer());
+    const conversationRef = useRef<ChatBlock[]>([]);
+    const autoGenerateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // ─── AI Answers state ───
     const [answers, setAnswers] = useState<Answer[]>([]);
+    const answersRef = useRef<Answer[]>([]);
     const [currentAnswerIndex, setCurrentAnswerIndex] = useState(0);
     const [isCapturing, setIsCapturing] = useState(false);
+
+    // Sync answersRef with answers
+    useEffect(() => {
+        answersRef.current = answers;
+    }, [answers]);
 
     // ─── Session timer ───
     const [sessionTime, setSessionTime] = useState(0);
@@ -42,14 +59,62 @@ function App(): JSX.Element {
         isTranscribingRef.current = true;
         try {
             while (transcriptionQueueRef.current.length > 0) {
-                const nextChunk = transcriptionQueueRef.current.shift();
-                if (!nextChunk) continue;
+                const nextItem = transcriptionQueueRef.current.shift();
+                if (!nextItem) continue;
 
                 try {
-                    const result = await transcribe(nextChunk);
+                    const result = await transcribe(nextItem.chunk);
                     if (result && result.trim()) {
-                        const fullText = stabilizerRef.current.addChunk(result);
-                        setTranscript(fullText);
+                        const stabilizer = nextItem.source === 'user' ? userStabilizerRef.current : interviewerStabilizerRef.current;
+                        
+                        setConversation(prev => {
+                            const newConv = [...prev];
+                            const lastBlock = newConv.length > 0 ? newConv[newConv.length - 1] : null;
+                            
+                            let textToSet = '';
+                            if (!lastBlock || lastBlock.speaker !== nextItem.source) {
+                                // Speaker changed or first block. Clear stabilizer and start fresh.
+                                stabilizer.clear();
+                                textToSet = stabilizer.addChunk(result);
+                                newConv.push({
+                                    id: Date.now().toString() + Math.random().toString(),
+                                    speaker: nextItem.source,
+                                    text: textToSet,
+                                    timestamp: new Date()
+                                });
+                            } else {
+                                // Same speaker continuing
+                                textToSet = stabilizer.addChunk(result);
+                                lastBlock.text = textToSet;
+                            }
+                            
+                            conversationRef.current = newConv;
+
+                            // -- AUTO ANSWER LOGIC --
+                            const currentLastBlock = newConv[newConv.length - 1];
+                            if (currentLastBlock.speaker === 'interviewer') {
+                                const lowerText = currentLastBlock.text.toLowerCase().trim();
+                                const isLikelyQuestion = currentLastBlock.text.includes('?') || 
+                                    /^(what|where|when|why|who|how|can you|could you|tell me|would you|do you|please explain|is there|are there)/.test(lowerText);
+                                
+                                if (autoGenerateTimeoutRef.current) {
+                                    clearTimeout(autoGenerateTimeoutRef.current);
+                                }
+                                
+                                if (isLikelyQuestion) {
+                                    autoGenerateTimeoutRef.current = setTimeout(() => {
+                                        triggerAutoAnswer();
+                                    }, 1500);
+                                }
+                            } else if (currentLastBlock.speaker === 'user') {
+                                if (autoGenerateTimeoutRef.current) {
+                                    clearTimeout(autoGenerateTimeoutRef.current);
+                                    autoGenerateTimeoutRef.current = null;
+                                }
+                            }
+
+                            return newConv;
+                        });
                     }
                 } catch (error) {
                     console.error('Failed to transcribe chunk:', error);
@@ -60,9 +125,9 @@ function App(): JSX.Element {
         }
     }, [isModelLoaded, transcribe]);
 
-    const handleAudioChunk = useCallback(async (pcmSamples: Float32Array) => {
+    const handleAudioChunk = useCallback(async (source: SpeakerSource, pcmSamples: Float32Array) => {
         if (!isModelLoaded) return;
-        transcriptionQueueRef.current.push(pcmSamples);
+        transcriptionQueueRef.current.push({ source, chunk: pcmSamples });
         void processTranscriptionQueue();
     }, [isModelLoaded, processTranscriptionQueue]);
 
@@ -93,6 +158,10 @@ function App(): JSX.Element {
     const handleToggleRecording = async () => {
         if (isRecording) {
             stopRecording();
+            if (autoGenerateTimeoutRef.current) {
+                clearTimeout(autoGenerateTimeoutRef.current);
+                autoGenerateTimeoutRef.current = null;
+            }
         } else {
             try {
                 if (!isModelLoaded && !isModelLoading) {
@@ -100,8 +169,10 @@ function App(): JSX.Element {
                 }
                 transcriptionQueueRef.current = [];
                 isTranscribingRef.current = false;
-                stabilizerRef.current.clear();
-                setTranscript('');
+                userStabilizerRef.current.clear();
+                interviewerStabilizerRef.current.clear();
+                setConversation([]);
+                conversationRef.current = [];
                 clearChunks();
                 await startRecording();
             } catch (error) {
@@ -131,25 +202,26 @@ function App(): JSX.Element {
     }, [isExpanded]);
 
     const handleGenerateAnswer = async () => {
-        if (!transcript.trim()) return;
+        const fullTranscript = conversationRef.current.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
+        if (!fullTranscript.trim()) return;
 
         const newAnswer: Answer = {
             id: Date.now().toString(),
             source: 'transcript',
-            question: transcript,
+            question: fullTranscript,
             answer: '',
             timestamp: new Date(),
             isStreaming: true,
         };
 
         setAnswers(prev => [...prev, newAnswer]);
-        setCurrentAnswerIndex(answers.length);
+        setCurrentAnswerIndex(answersRef.current.length); // will point to the new last element index
         setIsExpanded(true);
 
         try {
             let streamedAnswer = '';
             await generateInterviewAnswer(
-                transcript,
+                fullTranscript,
                 undefined,
                 (chunk) => {
                     streamedAnswer += chunk;
@@ -163,7 +235,6 @@ function App(): JSX.Element {
                 }
             );
 
-            // Mark streaming complete
             setAnswers(prev =>
                 prev.map(a =>
                     a.id === newAnswer.id
@@ -175,6 +246,63 @@ function App(): JSX.Element {
             console.error('Failed to generate answer:', error);
             setAnswers(prev => prev.filter(a => a.id !== newAnswer.id));
         }
+    };
+
+    const triggerAutoAnswerRef = useRef(handleGenerateAnswer);
+    useEffect(() => {
+        triggerAutoAnswerRef.current = handleGenerateAnswer;
+    }, [handleGenerateAnswer]);
+
+    const triggerAutoAnswer = () => {
+        // Run auto-answer based on the last 5 conversation blocks to prevent massive prompts
+        const recentBlocks = conversationRef.current.slice(-5);
+        const autoTranscript = recentBlocks.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
+        if (!autoTranscript.trim()) return;
+
+        const newAnswer: Answer = {
+            id: Date.now().toString(),
+            source: 'transcript',
+            question: autoTranscript,
+            answer: '',
+            timestamp: new Date(),
+            isStreaming: true,
+        };
+
+        setAnswers(prev => [...prev, newAnswer]);
+        setCurrentAnswerIndex(answersRef.current.length);
+        setIsExpanded(true);
+
+        // Disconnect from the main handleGenerateAnswer to allow the smaller context window and independent closure
+        (async () => {
+            try {
+                let streamedAnswer = '';
+                await generateInterviewAnswer(
+                    autoTranscript,
+                    undefined,
+                    (chunk) => {
+                        streamedAnswer += chunk;
+                        setAnswers(prev =>
+                            prev.map(a =>
+                                a.id === newAnswer.id
+                                    ? { ...a, answer: streamedAnswer, isStreaming: true }
+                                    : a
+                            )
+                        );
+                    }
+                );
+
+                setAnswers(prev =>
+                    prev.map(a =>
+                        a.id === newAnswer.id
+                            ? { ...a, isStreaming: false }
+                            : a
+                    )
+                );
+            } catch (error) {
+                console.error('Failed to auto-generate answer:', error);
+                setAnswers(prev => prev.filter(a => a.id !== newAnswer.id));
+            }
+        })();
     };
 
     const handleCaptureScreen = async () => {
@@ -207,8 +335,14 @@ function App(): JSX.Element {
     };
 
     const handleClearTranscript = () => {
-        stabilizerRef.current.clear();
-        setTranscript('');
+        userStabilizerRef.current.clear();
+        interviewerStabilizerRef.current.clear();
+        setConversation([]);
+        conversationRef.current = [];
+        if (autoGenerateTimeoutRef.current) {
+            clearTimeout(autoGenerateTimeoutRef.current);
+            autoGenerateTimeoutRef.current = null;
+        }
     };
 
     const handleClearAnswers = () => {
@@ -254,7 +388,7 @@ function App(): JSX.Element {
         return () => {
             unsubscribers.forEach(unsub => unsub());
         };
-    }, [transcript, answers.length]); // Re-subscribe when these change so handlers have fresh closures
+    }, [conversation, answers.length]); // Re-subscribe when these change so handlers have fresh closures
 
     const handleSettingsChanged = async () => {
         // Reload model with new settings if they were updated
@@ -274,7 +408,7 @@ function App(): JSX.Element {
             isCapturing={isCapturing}
             isGenerating={isGenerating}
             sessionTime={sessionTime}
-            transcript={transcript}
+            conversation={conversation}
             answers={answers}
             currentAnswerIndex={currentAnswerIndex}
             isModelLoading={isModelLoading}

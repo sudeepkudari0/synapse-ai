@@ -3,6 +3,7 @@ import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
 import { AnswerPanel, Answer } from './AnswerPanel';
 import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
+import { ChatBlock } from '../../App';
 import './FloatingWidget.css';
 
 interface FloatingWidgetProps {
@@ -13,7 +14,7 @@ interface FloatingWidgetProps {
     isCapturing: boolean;
     isGenerating: boolean;
     sessionTime: number;
-    transcript: string;
+    conversation: ChatBlock[];
     answers: Answer[];
     currentAnswerIndex: number;
     isModelLoading: boolean;
@@ -39,7 +40,7 @@ export function FloatingWidget({
     isCapturing,
     isGenerating,
     sessionTime,
-    transcript,
+    conversation,
     answers,
     currentAnswerIndex,
     isModelLoading,
@@ -106,7 +107,7 @@ export function FloatingWidget({
                     isCapturing={isCapturing}
                     isGenerating={isGenerating}
                     sessionTime={sessionTime}
-                    hasTranscript={!!transcript}
+                    hasTranscript={conversation && conversation.length > 0}
                     onToggleRecording={onToggleRecording}
                     onToggleExpanded={onToggleExpanded}
                     onCaptureScreen={onCaptureScreen}
@@ -146,7 +147,7 @@ export function FloatingWidget({
 
                             {/* Transcript panel */}
                             <TranscriptPanel
-                                transcript={transcript}
+                                conversation={conversation}
                                 onClear={onClearTranscript}
                             />
 

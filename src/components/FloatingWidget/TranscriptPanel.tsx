@@ -1,13 +1,14 @@
 import { useRef, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
+import { ChatBlock } from '../../App';
 
 interface TranscriptPanelProps {
-    transcript: string;
+    conversation: ChatBlock[];
     onClear: () => void;
 }
 
-export function TranscriptPanel({ transcript, onClear }: TranscriptPanelProps) {
+export function TranscriptPanel({ conversation, onClear }: TranscriptPanelProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom as new text comes in
@@ -15,9 +16,9 @@ export function TranscriptPanel({ transcript, onClear }: TranscriptPanelProps) {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [transcript]);
+    }, [conversation]);
 
-    if (!transcript) {
+    if (!conversation || conversation.length === 0) {
         return (
             <div className="panel-section">
                 <div className="px-4 py-6 text-center">
@@ -46,14 +47,24 @@ export function TranscriptPanel({ transcript, onClear }: TranscriptPanelProps) {
                 </IconButton>
             </div>
 
-            {/* Transcript text */}
+            {/* Conversation list */}
             <div
                 ref={scrollRef}
-                className="px-4 py-3 max-h-[120px] overflow-y-auto"
+                className="px-4 py-3 max-h-[160px] overflow-y-auto space-y-3"
             >
-                <p className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap">
-                    {transcript}
-                </p>
+                {conversation.map((block) => {
+                    const isUser = block.speaker === 'user';
+                    return (
+                        <div key={block.id} className="text-[13px] leading-relaxed">
+                            <span className={`font-bold mr-1.5 ${isUser ? 'text-[#38bdf8]' : 'text-[#34d399]'}`}>
+                                {isUser ? 'ME:' : 'Interviewer:'}
+                            </span>
+                            <span className="text-[var(--text-primary)]">
+                                {block.text}
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

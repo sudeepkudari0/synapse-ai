@@ -12,8 +12,13 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [settings, setSettings] = useState({
         whisperModel: 'small.en',
         geminiApiKey: '',
-        groqApiKey: ''
+        groqApiKey: '',
+        useOllamaOnly: false,
+        ollamaModel: 'qwen2.5-coder:1.5b',
+        ollamaBaseUrl: 'http://localhost:11434/v1'
     });
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isTesting, setIsTesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -32,7 +37,10 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                 setSettings({
                     whisperModel: settingsRes.settings.whisperModel || 'small.en',
                     geminiApiKey: settingsRes.settings.geminiApiKey || '',
-                    groqApiKey: settingsRes.settings.groqApiKey || ''
+                    groqApiKey: settingsRes.settings.groqApiKey || '',
+                    useOllamaOnly: settingsRes.settings.useOllamaOnly || false,
+                    ollamaModel: settingsRes.settings.ollamaModel || 'qwen2.5-coder:1.5b',
+                    ollamaBaseUrl: settingsRes.settings.ollamaBaseUrl || 'http://localhost:11434/v1'
                 });
             }
         } catch (error) {
@@ -50,6 +58,25 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             console.error('Failed to save settings:', error);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleTestOllama = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+        try {
+            // We save the settings first so the test uses the fresh values
+            await window.electronAPI.updateSettings(settings);
+            const res = await window.electronAPI.testOllama();
+            if (res.success) {
+                setTestResult({ success: true, message: `Connected! Response: ${res.message}` });
+            } else {
+                setTestResult({ success: false, message: `Failed: ${res.error}` });
+            }
+        } catch (error) {
+            setTestResult({ success: false, message: `Test error: ${error}` });
+        } finally {
+            setIsTesting(false);
         }
     };
 
@@ -144,8 +171,75 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
+
+                            <div className="pt-2 border-t border-zinc-800 mt-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-sm font-semibold text-white">Local AI (Ollama)</h3>
+                                    <div className="flex items-center">
+                                        <span className="text-xs text-zinc-400 mr-2">Use Ollama Only</span>
+                                        <button
+                                            onClick={() => setSettings({ ...settings, useOllamaOnly: !settings.useOllamaOnly })}
+                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                settings.useOllamaOnly ? 'bg-indigo-600' : 'bg-zinc-700'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                                    settings.useOllamaOnly ? 'translate-x-5' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                            Ollama Base URL
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={settings.ollamaBaseUrl}
+                                            onChange={(e) => setSettings({ ...settings, ollamaBaseUrl: e.target.value })}
+                                            placeholder="http://localhost:11434/v1"
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                            Model Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={settings.ollamaModel}
+                                            onChange={(e) => setSettings({ ...settings, ollamaModel: e.target.value })}
+                                            placeholder="qwen2.5-coder:1.5b"
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <button
+                                            onClick={handleTestOllama}
+                                            disabled={isTesting}
+                                            className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg transition-colors border border-zinc-700 flex items-center justify-center gap-2"
+                                        >
+                                            {isTesting ? 'Testing...' : 'Test Ollama Connection'}
+                                        </button>
+                                        {testResult && (
+                                            <div className={`text-[10px] px-2 py-1 rounded ${
+                                                testResult.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                            }`}>
+                                                {testResult.message}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             <p className="mt-2 text-xs text-zinc-500">
-                                Gemini is used as the primary LLM for screen analysis. Groq is used as a fast fallback.
+                                {settings.useOllamaOnly 
+                                    ? "Currently strictly using local Ollama. Cloud fallbacks are disabled." 
+                                    : "Gemini is the cloud primary. Groq is the cloud fallback. Ollama is checked first if active."}
                             </p>
                         </div>
                     )}

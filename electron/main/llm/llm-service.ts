@@ -22,6 +22,9 @@ interface LLMConfig {
     groqApiKey: string;
     geminiModel: string;
     groqModel: string;
+    ollamaModel: string;
+    ollamaBaseUrl: string;
+    useOllamaOnly: boolean;
 }
 
 /**
@@ -38,11 +41,13 @@ export class LLMService {
     private config: LLMConfig;
     private geminiClient: GoogleGenAI;
     private groqClient: OpenAI;
+    private ollamaClient: OpenAI;
 
     // Default models
     private static readonly DEFAULT_MODELS = {
         gemini: 'gemini-2.0-flash', // Supports vision
         groq: 'llama-4-scout-17b-16e-instruct', // Supports vision
+        ollama: 'qwen2.5-coder:1.5b', // Default local model
     };
 
     constructor(config?: Partial<LLMConfig>) {
@@ -65,6 +70,9 @@ export class LLMService {
             groqApiKey: groqApiKey || '',
             geminiModel: process.env.GEMINI_MODEL || LLMService.DEFAULT_MODELS.gemini,
             groqModel: process.env.GROQ_MODEL || LLMService.DEFAULT_MODELS.groq,
+            ollamaModel: settings.ollamaModel || process.env.OLLAMA_MODEL || LLMService.DEFAULT_MODELS.ollama,
+            ollamaBaseUrl: settings.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1',
+            useOllamaOnly: settings.useOllamaOnly ?? false,
         };
 
         // Initialize Gemini
@@ -85,6 +93,12 @@ export class LLMService {
         } else {
             this.groqClient = null as any;
         }
+
+        // Initialize Ollama (via OpenAI SDK pointing to local instance)
+        this.ollamaClient = new OpenAI({
+            apiKey: 'ollama', // Dummy key required by SDK
+            baseURL: this.config.ollamaBaseUrl,
+        });
     }
 
     /**
@@ -107,13 +121,23 @@ export class LLMService {
      */
     private async generateTextWithFallback(options: LLMOptions): Promise<string> {
         try {
-            if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
-            console.log('[LLMService] Trying Gemini...');
-            return await this.generateGemini(options);
+            console.log(`[LLMService] Trying Ollama (${this.config.ollamaModel})...`);
+            return await this.generateOllama(options);
         } catch (error) {
-            if (!this.groqClient) throw new Error("Both Gemini and Groq API keys are missing in settings");
-            console.error('[LLMService] Gemini failed:', error, '- Falling back to Groq...');
-            return await this.generateGroq(options);
+            if (this.config.useOllamaOnly) {
+                console.error('[LLMService] Ollama failed and useOllamaOnly is enabled. Throwing error.');
+                throw error;
+            }
+            console.error('[LLMService] Ollama failed:', error, '- Falling back to Gemini...');
+            try {
+                if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
+                console.log('[LLMService] Trying Gemini...');
+                return await this.generateGemini(options);
+            } catch (error2) {
+                if (!this.groqClient) throw new Error("Both Gemini and Groq API keys are missing in settings");
+                console.error('[LLMService] Gemini failed:', error2, '- Falling back to Groq...');
+                return await this.generateGroq(options);
+            }
         }
     }
 
@@ -122,36 +146,60 @@ export class LLMService {
      */
     private async *streamGenerateWithFallback(options: LLMOptions): AsyncIterable<string> {
         try {
-            if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
-            console.log('[LLMService] Trying Gemini (Stream)...');
-            const stream = this.streamGemini(options);
+            console.log(`[LLMService] Trying Ollama (Stream, ${this.config.ollamaModel})...`);
+            const stream = this.streamOllama(options);
             const iterator = stream[Symbol.asyncIterator]();
             let firstResult;
 
-            // Try to fetch the first chunk to catch connection/auth/rate-limit errors
             try {
                 firstResult = await iterator.next();
             } catch (err) {
-                throw err; // Re-throw to trigger the Groq fallback
+                throw err;
             }
 
-            // If we successfully got the first chunk, yield it
             if (!firstResult.done) {
                 yield firstResult.value;
-
-                // Then yield the rest of the stream normally
                 while (true) {
                     const result = await iterator.next();
                     if (result.done) break;
                     yield result.value;
                 }
             }
-            return; // Success with Gemini, no need for Groq
+            return;
+        } catch (error) {
+            if (this.config.useOllamaOnly) {
+                console.error('[LLMService] Ollama Stream failed and useOllamaOnly is enabled. Throwing error.');
+                throw error;
+            }
+            console.error('[LLMService] Ollama Stream failed:', error, '- Falling back to Gemini...');
+        }
+
+        try {
+            if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
+            console.log('[LLMService] Trying Gemini (Stream)...');
+            const stream = this.streamGemini(options);
+            const iterator = stream[Symbol.asyncIterator]();
+            let firstResult;
+
+            try {
+                firstResult = await iterator.next();
+            } catch (err) {
+                throw err;
+            }
+
+            if (!firstResult.done) {
+                yield firstResult.value;
+                while (true) {
+                    const result = await iterator.next();
+                    if (result.done) break;
+                    yield result.value;
+                }
+            }
+            return;
         } catch (error) {
             console.error('[LLMService] Gemini Stream failed:', error, '- Falling back to Groq...');
         }
 
-        // Fallback to Groq if Gemini failed
         if (!this.groqClient) throw new Error("Both Gemini and Groq API keys are missing in settings");
         console.log('[LLMService] Trying Groq (Stream)...');
         yield* this.streamGroq(options);
@@ -271,6 +319,78 @@ export class LLMService {
 
         const stream = await this.groqClient.chat.completions.create({
             model: this.config.groqModel,
+            messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.maxTokens,
+            stream: true,
+        });
+
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                yield content;
+            }
+        }
+    }
+
+    // ─── Ollama Implementation ───
+
+    private async generateOllama(options: LLMOptions): Promise<string> {
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            { role: 'system', content: options.systemPrompt },
+        ];
+
+        if (options.imageData) {
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: options.prompt },
+                    {
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:image/png;base64,${options.imageData}`,
+                        },
+                    },
+                ],
+            });
+        } else {
+            messages.push({ role: 'user', content: options.prompt });
+        }
+
+        const response = await this.ollamaClient.chat.completions.create({
+            model: this.config.ollamaModel,
+            messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.maxTokens,
+        });
+
+        return response.choices[0]?.message?.content || '';
+    }
+
+    private async *streamOllama(options: LLMOptions): AsyncIterable<string> {
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            { role: 'system', content: options.systemPrompt },
+        ];
+
+        if (options.imageData) {
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: options.prompt },
+                    {
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:image/png;base64,${options.imageData}`,
+                        },
+                    },
+                ],
+            });
+        } else {
+            messages.push({ role: 'user', content: options.prompt });
+        }
+
+        const stream = await this.ollamaClient.chat.completions.create({
+            model: this.config.ollamaModel,
             messages,
             temperature: options.temperature ?? 0.7,
             max_tokens: options.maxTokens,

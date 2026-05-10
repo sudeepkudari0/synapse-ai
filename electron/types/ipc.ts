@@ -64,5 +64,6 @@ export const IPC_CHANNELS = {
     GET_SETTINGS: 'settings:get',
     UPDATE_SETTINGS: 'settings:update',
     GET_AVAILABLE_MODELS: 'models:get-available',
+    TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
 } as const;

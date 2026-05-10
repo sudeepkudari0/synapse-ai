@@ -14,6 +14,7 @@ const IPC_CHANNELS = {
     GET_SETTINGS: 'settings:get',
     UPDATE_SETTINGS: 'settings:update',
     GET_AVAILABLE_MODELS: 'models:get-available',
+    TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
 } as const;
 
@@ -92,6 +93,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     getAvailableModels: async () => {
         return await ipcRenderer.invoke(IPC_CHANNELS.GET_AVAILABLE_MODELS);
+    },
+    
+    testOllama: async () => {
+        return await ipcRenderer.invoke(IPC_CHANNELS.TEST_OLLAMA);
     },
 
     // Shortcut listeners — renderer subscribes to global shortcut events

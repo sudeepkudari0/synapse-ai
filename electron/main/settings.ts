@@ -6,12 +6,18 @@ export interface AppSettings {
     whisperModel: string;
     geminiApiKey: string;
     groqApiKey: string;
+    useOllamaOnly: boolean;
+    ollamaModel: string;
+    ollamaBaseUrl: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
     whisperModel: 'small.en',
     geminiApiKey: '',
     groqApiKey: '',
+    useOllamaOnly: false,
+    ollamaModel: 'qwen2.5-coder:1.5b',
+    ollamaBaseUrl: 'http://localhost:11434/v1',
 };
 
 let settingsCache: AppSettings | null = null;

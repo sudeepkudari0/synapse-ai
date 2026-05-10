@@ -112,6 +112,30 @@ export function registerIPCHandlers(): void {
             };
         }
     });
+    
+    // Ollama: Test connection
+    ipcMain.handle(IPC_CHANNELS.TEST_OLLAMA, async () => {
+        try {
+            const { getLLMService } = await import('./llm/llm-service');
+            const llmService = getLLMService();
+            
+            // Try a minimal generation to verify connectivity and model availability
+            const result = await llmService.generate({
+                systemPrompt: 'You are a connectivity tester.',
+                prompt: 'Say "Ollama is active" in exactly three words.',
+                maxTokens: 10,
+                stream: false,
+            });
+            
+            return { success: true, message: result.text.trim() };
+        } catch (error) {
+            console.error('IPC: Ollama test failed:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Ollama not reachable or model not found',
+            };
+        }
+    });
 
     // Window: Set ignore mouse events (for click-through behavior)
     ipcMain.handle(IPC_CHANNELS.SET_IGNORE_MOUSE_EVENTS, async (event, ignore: boolean) => {

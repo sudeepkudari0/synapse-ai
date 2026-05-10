@@ -4,6 +4,8 @@ import { MicVAD } from '@ricky0123/vad-web';
 import ortWasmThreadedMjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url';
 import ortWasmThreadedWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 
+export type SpeakerSource = 'user' | 'interviewer';
+
 interface UseMixedAudioRecorderReturn {
     isRecording: boolean;
     startRecording: () => Promise<void>;
@@ -12,7 +14,7 @@ interface UseMixedAudioRecorderReturn {
 }
 
 export function useMixedAudioRecorder(
-    onNewChunk?: (chunk: Float32Array) => void
+    onNewChunk?: (source: SpeakerSource, chunk: Float32Array) => void
 ): UseMixedAudioRecorderReturn {
     const LIVE_CHUNK_MS = 3000;
     const SAMPLE_RATE = 16000;
@@ -23,14 +25,20 @@ export function useMixedAudioRecorder(
     const OVERLAP_SAMPLES = Math.floor((SAMPLE_RATE * OVERLAP_MS) / 1000);
 
     const [isRecording, setIsRecording] = useState(false);
-    const mixedStreamRef = useRef<MediaStream | null>(null);
+    
     const micStreamRef = useRef<MediaStream | null>(null);
     const systemStreamRef = useRef<MediaStream | null>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const vadRef = useRef<any>(null);
-    const liveFramesRef = useRef<Float32Array[]>([]);
-    const liveSamplesRef = useRef(0);
-    const previousTailRef = useRef<Float32Array | null>(null);
+    
+    const micVADRef = useRef<any>(null);
+    const systemVADRef = useRef<any>(null);
+
+    const micLiveFramesRef = useRef<Float32Array[]>([]);
+    const micLiveSamplesRef = useRef(0);
+    const micPreviousTailRef = useRef<Float32Array | null>(null);
+
+    const sysLiveFramesRef = useRef<Float32Array[]>([]);
+    const sysLiveSamplesRef = useRef(0);
+    const sysPreviousTailRef = useRef<Float32Array | null>(null);
 
     const onNewChunkRef = useRef(onNewChunk);
     
@@ -38,53 +46,56 @@ export function useMixedAudioRecorder(
         onNewChunkRef.current = onNewChunk;
     }, [onNewChunk]);
 
-    const emitBufferedLiveChunk = useCallback((force = false) => {
-        const callback = onNewChunkRef.current;
-        if (!callback) return;
+    const createEmitFunction = (
+        source: SpeakerSource,
+        liveFramesRef: React.MutableRefObject<Float32Array[]>,
+        liveSamplesRef: React.MutableRefObject<number>,
+        previousTailRef: React.MutableRefObject<Float32Array | null>
+    ) => {
+        return (force = false) => {
+            const callback = onNewChunkRef.current;
+            if (!callback) return;
 
-        if (!force && liveSamplesRef.current < LIVE_CHUNK_SAMPLES) {
-            return;
-        }
-        if (liveSamplesRef.current === 0) {
-            return;
-        }
+            if (!force && liveSamplesRef.current < LIVE_CHUNK_SAMPLES) return;
+            if (liveSamplesRef.current === 0) return;
 
-        // Assemble raw chunk from buffered frames
-        const rawChunk = new Float32Array(liveSamplesRef.current);
-        let offset = 0;
-        for (const frame of liveFramesRef.current) {
-            rawChunk.set(frame, offset);
-            offset += frame.length;
-        }
+            const rawChunk = new Float32Array(liveSamplesRef.current);
+            let offset = 0;
+            for (const frame of liveFramesRef.current) {
+                rawChunk.set(frame, offset);
+                offset += frame.length;
+            }
 
-        liveFramesRef.current = [];
-        liveSamplesRef.current = 0;
+            liveFramesRef.current = [];
+            liveSamplesRef.current = 0;
 
-        // Prepend overlap from the previous chunk so Whisper has word-boundary context
-        let finalChunk: Float32Array;
-        if (previousTailRef.current) {
-            finalChunk = new Float32Array(previousTailRef.current.length + rawChunk.length);
-            finalChunk.set(previousTailRef.current, 0);
-            finalChunk.set(rawChunk, previousTailRef.current.length);
-        } else {
-            finalChunk = rawChunk;
-        }
+            let finalChunk: Float32Array;
+            if (previousTailRef.current) {
+                finalChunk = new Float32Array(previousTailRef.current.length + rawChunk.length);
+                finalChunk.set(previousTailRef.current, 0);
+                finalChunk.set(rawChunk, previousTailRef.current.length);
+            } else {
+                finalChunk = rawChunk;
+            }
 
-        // Save the tail of this chunk for the next overlap
-        if (finalChunk.length > OVERLAP_SAMPLES) {
-            previousTailRef.current = finalChunk.slice(-OVERLAP_SAMPLES);
-        } else {
-            previousTailRef.current = finalChunk.slice();
-        }
+            if (finalChunk.length > OVERLAP_SAMPLES) {
+                previousTailRef.current = finalChunk.slice(-OVERLAP_SAMPLES);
+            } else {
+                previousTailRef.current = finalChunk.slice();
+            }
 
-        callback(finalChunk);
-    }, []);
+            callback(source, finalChunk);
+        };
+    };
+
+    const emitMicChunk = useCallback(createEmitFunction('user', micLiveFramesRef, micLiveSamplesRef, micPreviousTailRef), []);
+    const emitSysChunk = useCallback(createEmitFunction('interviewer', sysLiveFramesRef, sysLiveSamplesRef, sysPreviousTailRef), []);
 
     const startRecording = useCallback(async () => {
         try {
             logger.info('Starting audio recording via VAD...');
             const assetBasePath = import.meta.env.BASE_URL || '/';
-            // Get microphone stream
+            
             const micStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
@@ -94,8 +105,6 @@ export function useMixedAudioRecorder(
                 },
             });
             micStreamRef.current = micStream;
-
-            let recordingStream: MediaStream = micStream;
 
             try {
                 const sources = await window.electronAPI.getDesktopSources();
@@ -121,106 +130,120 @@ export function useMixedAudioRecorder(
                             },
                         },
                     });
-                    systemStreamRef.current = systemStream;
-
-                    // Mix mic + system audio
-                    const audioContext = new AudioContext({ sampleRate: 16000 });
-                    audioContextRef.current = audioContext;
-
-                    const micSource = audioContext.createMediaStreamSource(micStream);
-                    const systemSource = audioContext.createMediaStreamSource(systemStream);
-
-                    const micGain = audioContext.createGain();
-                    const systemGain = audioContext.createGain();
-                    micGain.gain.value = 1.0;
-                    systemGain.gain.value = 0.5; // system audio needs more volume usually
-
-                    const destination = audioContext.createMediaStreamDestination();
-                    micSource.connect(micGain);
-                    systemSource.connect(systemGain);
-                    micGain.connect(destination);
-                    systemGain.connect(destination);
-
-                    recordingStream = destination.stream;
-                    mixedStreamRef.current = recordingStream;
-                    logger.info('System audio capture and mixing successful.');
+                    
+                    // We only need the audio track for VAD processing
+                    const sysAudioStream = new MediaStream(systemStream.getAudioTracks());
+                    systemStreamRef.current = sysAudioStream;
+                    
+                    // Stop the video track as we don't use it
+                    systemStream.getVideoTracks().forEach((track: any) => track.stop());
+                    
+                    logger.info('System audio capture successful.');
                 }
             } catch (err) {
-                logger.warn('System audio unavailable, using mic only:', err);
-                mixedStreamRef.current = micStream;
+                logger.warn('System audio unavailable:', err);
             }
 
-            // Integration with @ricky0123/vad-web (Silero VAD)
-            // micVAD will use the recording stream to trigger onSpeechEnd
-            logger.info('Initializing Silero VAD...');
-            vadRef.current = await MicVAD.new({
-                baseAssetPath: assetBasePath,
-                onnxWASMBasePath: assetBasePath,
-                getStream: async () => recordingStream,
-                resumeStream: async () => recordingStream,
-                pauseStream: async (_stream: MediaStream) => {
-                    // Keep tracks alive during pause so resume works with the same mixed source.
-                },
-                ortConfig: (ort) => {
-                    ort.env.logLevel = 'error';
-                    ort.env.wasm.wasmPaths = {
-                        mjs: ortWasmThreadedMjsUrl,
-                        wasm: ortWasmThreadedWasmUrl,
-                    };
-                },
-                model: "v5",
-                positiveSpeechThreshold: 0.35,
-                negativeSpeechThreshold: 0.25,
-                minSpeechMs: 250,
-                preSpeechPadMs: 500,
-                redemptionMs: 900,
-                submitUserSpeechOnPause: true,
-                onSpeechStart: () => {
-                    logger.debug("VAD: Speech started detected");
-                },
-                onFrameProcessed: (probs: { isSpeech: number }, frame: Float32Array) => {
-                    // Low-latency path: emit small chunks continuously while speech is active.
-                    if (probs.isSpeech >= 0.25) {
-                        liveFramesRef.current.push(frame.slice());
-                        liveSamplesRef.current += frame.length;
-                        emitBufferedLiveChunk(false);
-                    } else if (liveSamplesRef.current > 0) {
-                        // On silence, flush any trailing buffered speech quickly.
-                        emitBufferedLiveChunk(true);
+            const createVAD = async (stream: MediaStream, source: SpeakerSource, emitChunk: (force?: boolean) => void) => {
+                return await MicVAD.new({
+                    baseAssetPath: assetBasePath,
+                    onnxWASMBasePath: assetBasePath,
+                    getStream: async () => stream,
+                    resumeStream: async () => stream,
+                    pauseStream: async () => {},
+                    ortConfig: (ort) => {
+                        ort.env.logLevel = 'error';
+                        ort.env.wasm.wasmPaths = {
+                            mjs: ortWasmThreadedMjsUrl,
+                            wasm: ortWasmThreadedWasmUrl,
+                        };
+                    },
+                    model: "v5",
+                    positiveSpeechThreshold: 0.35,
+                    negativeSpeechThreshold: 0.25,
+                    minSpeechMs: 250,
+                    preSpeechPadMs: 500,
+                    redemptionMs: 900,
+                    submitUserSpeechOnPause: true,
+                    onSpeechStart: () => {
+                        logger.debug(`VAD [${source}]: Speech started detected`);
+                        if (source === 'user') {
+                            micPreviousTailRef.current = null;
+                        } else {
+                            sysPreviousTailRef.current = null;
+                        }
+                    },
+                    onFrameProcessed: (probs: { isSpeech: number }, frame: Float32Array) => {
+                        if (probs.isSpeech >= 0.25) {
+                            if (source === 'user') {
+                                micLiveFramesRef.current.push(frame.slice());
+                                micLiveSamplesRef.current += frame.length;
+                            } else {
+                                sysLiveFramesRef.current.push(frame.slice());
+                                sysLiveSamplesRef.current += frame.length;
+                            }
+                            emitChunk(false);
+                        } else if ((source === 'user' ? micLiveSamplesRef.current : sysLiveSamplesRef.current) > 0) {
+                            emitChunk(true);
+                        }
+                    },
+                    onSpeechEnd: () => {
+                        logger.debug(`VAD [${source}]: Speech ended. Flushing live chunk buffer`);
+                        emitChunk(true);
+                        if (source === 'user') {
+                            micPreviousTailRef.current = null;
+                        } else {
+                            sysPreviousTailRef.current = null;
+                        }
+                    },
+                    onVADMisfire: () => {
+                        logger.debug(`VAD [${source}]: Misfire (speech too short)`);
                     }
-                },
-                onSpeechEnd: (_audio: Float32Array) => {
-                    logger.debug("VAD: Speech ended. Flushing live chunk buffer");
-                    emitBufferedLiveChunk(true);
-                },
-                onVADMisfire: () => {
-                    logger.debug("VAD: Misfire (speech too short)");
-                }
-            });
+                });
+            };
 
-            vadRef.current.start();
+            logger.info('Initializing Silero VADs...');
+            
+            if (micStreamRef.current) {
+                micVADRef.current = await createVAD(micStreamRef.current, 'user', emitMicChunk);
+                micVADRef.current.start();
+            }
+            
+            if (systemStreamRef.current && systemStreamRef.current.getAudioTracks().length > 0) {
+                systemVADRef.current = await createVAD(systemStreamRef.current, 'interviewer', emitSysChunk);
+                systemVADRef.current.start();
+            }
+
             setIsRecording(true);
         } catch (error) {
             logger.error('Failed to start recording:', error);
             throw error;
         }
-    }, []);
+    }, [emitMicChunk, emitSysChunk]);
 
     const stopRecording = useCallback(() => {
-        if (vadRef.current) {
-            vadRef.current.pause();
-            vadRef.current.destroy();
-            vadRef.current = null;
+        if (micVADRef.current) {
+            micVADRef.current.pause();
+            micVADRef.current.destroy();
+            micVADRef.current = null;
         }
-        emitBufferedLiveChunk(true);
-        liveFramesRef.current = [];
-        liveSamplesRef.current = 0;
-        previousTailRef.current = null;
+        if (systemVADRef.current) {
+            systemVADRef.current.pause();
+            systemVADRef.current.destroy();
+            systemVADRef.current = null;
+        }
+        
+        emitMicChunk(true);
+        emitSysChunk(true);
+        
+        micLiveFramesRef.current = [];
+        micLiveSamplesRef.current = 0;
+        micPreviousTailRef.current = null;
 
-        if (mixedStreamRef.current) {
-            mixedStreamRef.current.getTracks().forEach((track) => track.stop());
-            mixedStreamRef.current = null;
-        }
+        sysLiveFramesRef.current = [];
+        sysLiveSamplesRef.current = 0;
+        sysPreviousTailRef.current = null;
+
         if (micStreamRef.current) {
             micStreamRef.current.getTracks().forEach((track) => track.stop());
             micStreamRef.current = null;
@@ -230,13 +253,8 @@ export function useMixedAudioRecorder(
             systemStreamRef.current = null;
         }
 
-        if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
-        }
-
         setIsRecording(false);
-    }, [emitBufferedLiveChunk]);
+    }, [emitMicChunk, emitSysChunk]);
 
     const clearChunks = useCallback(() => {}, []);
 
