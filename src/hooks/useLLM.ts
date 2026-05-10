@@ -50,19 +50,12 @@ Provide structured, professional answers that:
                     temperature: options.temperature ?? 0.7,
                     maxTokens: options.maxTokens ?? 512,
                     stream: !!onChunk,
-                });
+                }, onChunk);
 
-                if (onChunk && response.stream) {
-                    // Handle streaming response
-                    let fullText = '';
-                    for await (const chunk of response.stream) {
-                        fullText += chunk;
-                        onChunk(chunk);
-                    }
-                    return fullText;
-                } else {
-                    // Handle non-streaming response
+                if (response.success) {
                     return response.text || '';
+                } else {
+                    throw new Error(response.error || 'Failed to generate response');
                 }
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Failed to generate response';

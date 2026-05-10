@@ -39,16 +39,20 @@ interface ElectronAPI {
         answer?: string;
         error?: string;
     }>;
-    llmGenerate: (options: {
-        systemPrompt: string;
-        prompt: string;
-        temperature?: number;
-        maxTokens?: number;
-        stream?: boolean;
-    }) => Promise<{
+    llmGenerate: (
+        options: {
+            systemPrompt: string;
+            prompt: string;
+            temperature?: number;
+            maxTokens?: number;
+            stream?: boolean;
+            imageData?: string;
+        },
+        onChunk?: (chunk: string) => void
+    ) => Promise<{
         success: boolean;
         text?: string;
-        stream?: AsyncIterable<string>;
+        streaming?: boolean;
         error?: string;
     }>;
     quitApp: () => Promise<{ success: boolean; error?: string }>;

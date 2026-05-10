@@ -47,7 +47,7 @@ export class LLMService {
     private static readonly DEFAULT_MODELS = {
         gemini: 'gemini-2.0-flash', // Supports vision
         groq: 'llama-4-scout-17b-16e-instruct', // Supports vision
-        ollama: 'qwen2.5-coder:1.5b', // Default local model
+        ollama: 'qwen2.5-vl', // Default local model
     };
 
     constructor(config?: Partial<LLMConfig>) {
@@ -336,8 +336,9 @@ export class LLMService {
     // ─── Ollama Implementation ───
 
     private async generateOllama(options: LLMOptions): Promise<string> {
+        const directSystemPrompt = options.systemPrompt + "\n\nCRITICAL: Do not include any internal thought process, reasoning steps, or preamble. Provide only the direct answer.";
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-            { role: 'system', content: options.systemPrompt },
+            { role: 'system', content: directSystemPrompt },
         ];
 
         if (options.imageData) {
@@ -357,19 +358,30 @@ export class LLMService {
             messages.push({ role: 'user', content: options.prompt });
         }
 
-        const response = await this.ollamaClient.chat.completions.create({
-            model: this.config.ollamaModel,
-            messages,
-            temperature: options.temperature ?? 0.7,
-            max_tokens: options.maxTokens,
-        });
+        try {
+            const response = await this.ollamaClient.chat.completions.create({
+                model: this.config.ollamaModel,
+                messages,
+                temperature: 0, // Force 0 for immediate, deterministic answers
+                max_tokens: options.maxTokens,
+                // @ts-ignore - Ollama specific parameter
+                think: false,
+            });
 
-        return response.choices[0]?.message?.content || '';
+            return response.choices[0]?.message?.content || '';
+        } catch (error: any) {
+            // Handle non-JSON responses (like 404 or 500 HTML pages from Ollama)
+            if (error.message && (error.message.includes('Unexpected token') || error.message.includes('valid JSON'))) {
+                throw new Error(`Ollama model "${this.config.ollamaModel}" not found or Ollama server returned an error. Please check if the model is pulled and Ollama is running.`);
+            }
+            throw error;
+        }
     }
 
     private async *streamOllama(options: LLMOptions): AsyncIterable<string> {
+        const directSystemPrompt = options.systemPrompt + "\n\nCRITICAL: Do not include any internal thought process, reasoning steps, or preamble. Provide only the direct answer.";
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-            { role: 'system', content: options.systemPrompt },
+            { role: 'system', content: directSystemPrompt },
         ];
 
         if (options.imageData) {
@@ -389,19 +401,29 @@ export class LLMService {
             messages.push({ role: 'user', content: options.prompt });
         }
 
-        const stream = await this.ollamaClient.chat.completions.create({
-            model: this.config.ollamaModel,
-            messages,
-            temperature: options.temperature ?? 0.7,
-            max_tokens: options.maxTokens,
-            stream: true,
-        });
+        try {
+            const stream = await this.ollamaClient.chat.completions.create({
+                model: this.config.ollamaModel,
+                messages,
+                temperature: 0, // Force 0 for immediate, deterministic answers
+                max_tokens: options.maxTokens,
+                stream: true,
+                // @ts-ignore - Ollama specific parameter
+                think: false,
+            });
 
-        for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-                yield content;
+            for await (const chunk of stream) {
+                const content = chunk.choices[0]?.delta?.content;
+                if (content) {
+                    yield content;
+                }
             }
+        } catch (error: any) {
+            // Handle non-JSON responses (like 404 or 500 HTML pages from Ollama)
+            if (error.message && (error.message.includes('Unexpected token') || error.message.includes('valid JSON'))) {
+                throw new Error(`Ollama model "${this.config.ollamaModel}" not found or Ollama server returned an error. Please check if the model is pulled and Ollama is running.`);
+            }
+            throw error;
         }
     }
 

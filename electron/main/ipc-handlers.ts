@@ -87,22 +87,51 @@ export function registerIPCHandlers(): void {
     });
 
     // LLM: Generate response
-    ipcMain.handle('llm:generate', async (event, options: {
+    ipcMain.handle('llm:generate', async (event: any, options: {
         systemPrompt: string;
         prompt: string;
         temperature?: number;
         maxTokens?: number;
         stream?: boolean;
+        imageData?: string;
+        requestId?: string; // ID to tie stream chunks back to caller
     }) => {
         try {
             const { getLLMService } = await import('./llm/llm-service');
             const llmService = getLLMService();
 
-            const result = await llmService.generate(options);
-            return {
-                success: true,
-                ...result,
-            };
+            if (options.stream) {
+                const requestId = options.requestId || 'default';
+                const result = await llmService.generate(options);
+                
+                if (result.stream) {
+                    const stream = result.stream;
+                    (async () => {
+                        try {
+                            for await (const chunk of stream) {
+                                event.sender.send(`llm:chunk:${requestId}`, { chunk });
+                            }
+                            event.sender.send(`llm:done:${requestId}`);
+                        } catch (error) {
+                            console.error('IPC: Streaming failed:', error);
+                            event.sender.send(`llm:error:${requestId}`, { 
+                                error: error instanceof Error ? error.message : 'Streaming failed' 
+                            });
+                        }
+                    })();
+                }
+                
+                return {
+                    success: true,
+                    streaming: true,
+                };
+            } else {
+                const result = await llmService.generate(options);
+                return {
+                    success: true,
+                    text: result.text,
+                };
+            }
         } catch (error) {
             console.error('IPC: LLM generation failed:', error);
             return {

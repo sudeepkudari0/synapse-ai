@@ -73,7 +73,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
 
     // LLM API
-    llmGenerate: async (options: any) => {
+    llmGenerate: async (
+        options: {
+            systemPrompt: string;
+            prompt: string;
+            temperature?: number;
+            maxTokens?: number;
+            stream?: boolean;
+            imageData?: string;
+        },
+        onChunk?: (chunk: string) => void
+    ) => {
+        if (onChunk) {
+            const requestId = Math.random().toString(36).substring(7);
+            const chunkHandler = (_event: any, data: { chunk: string }) => onChunk(data.chunk);
+            const doneHandler = () => cleanup();
+            const errorHandler = (_event: any, data: { error: string }) => {
+                console.error('LLM Stream Error:', data.error);
+                cleanup();
+            };
+
+            const cleanup = () => {
+                ipcRenderer.removeListener(`llm:chunk:${requestId}`, chunkHandler);
+                ipcRenderer.removeListener(`llm:done:${requestId}`, doneHandler);
+                ipcRenderer.removeListener(`llm:error:${requestId}`, errorHandler);
+            };
+
+            ipcRenderer.on(`llm:chunk:${requestId}`, chunkHandler);
+            ipcRenderer.once(`llm:done:${requestId}`, doneHandler);
+            ipcRenderer.once(`llm:error:${requestId}`, errorHandler);
+            
+            return await ipcRenderer.invoke('llm:generate', { ...options, requestId });
+        }
         return await ipcRenderer.invoke('llm:generate', options);
     },
 
