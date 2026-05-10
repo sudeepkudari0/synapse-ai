@@ -132,7 +132,6 @@ export class WhisperTranscriber {
                 '-l', 'en',
                 '--host', SERVER_HOST,
                 '--port', SERVER_PORT.toString(),
-                '--convert',           // let the server handle WAV conversion if needed
                 '-t', '4',             // inference threads
                 '-nt',                 // no timestamps in output
             ];
@@ -140,6 +139,7 @@ export class WhisperTranscriber {
             serverLog(`Starting: whisper-server.exe ${args.join(' ')}`);
 
             const proc = spawn(this.serverExePath, args, {
+                cwd: path.dirname(this.serverExePath),
                 windowsHide: true,
                 stdio: ['ignore', 'pipe', 'pipe'],
             });
@@ -165,8 +165,10 @@ export class WhisperTranscriber {
 
             proc.on('exit', (code, signal) => {
                 serverLog(`Exited (code=${code}, signal=${signal})`);
-                this.serverProcess = null;
-                this.isInitialized = false;
+                if (this.serverProcess === proc) {
+                    this.serverProcess = null;
+                    this.isInitialized = false;
+                }
             });
 
             // Poll the server until it responds to a health check
@@ -361,9 +363,16 @@ export class WhisperTranscriber {
 
     async dispose(): Promise<void> {
         serverLog('Disposing — shutting down server...');
+        const procToKill = this.serverProcess;
         this.isInitialized = false;
         this.activeTranscription = null;
         this.killServer();
+        
+        // Wait briefly for the process to actually exit to free the port
+        if (procToKill) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
         serverLog('Disposed');
     }
 }

@@ -8,6 +8,7 @@ import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 function App(): JSX.Element {
     // ─── Widget state ───
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     // ─── Transcription state ───
     const [transcript, setTranscript] = useState<string>('');
@@ -110,8 +111,24 @@ function App(): JSX.Element {
     };
 
     const handleToggleExpanded = useCallback(() => {
-        setIsExpanded(prev => !prev);
-    }, []);
+        setIsExpanded(prev => {
+            if (prev && isSettingsOpen) {
+                // If closing widget, close settings too
+                setIsSettingsOpen(false);
+            }
+            return !prev;
+        });
+    }, [isSettingsOpen]);
+
+    const handleToggleSettings = useCallback(() => {
+        setIsSettingsOpen(prev => {
+            const willBeOpen = !prev;
+            if (willBeOpen && !isExpanded) {
+                setIsExpanded(true); // Open widget if settings are opened
+            }
+            return willBeOpen;
+        });
+    }, [isExpanded]);
 
     const handleGenerateAnswer = async () => {
         if (!transcript.trim()) return;
@@ -239,10 +256,20 @@ function App(): JSX.Element {
         };
     }, [transcript, answers.length]); // Re-subscribe when these change so handlers have fresh closures
 
+    const handleSettingsChanged = async () => {
+        // Reload model with new settings if they were updated
+        try {
+            await loadModel(true);
+        } catch (error) {
+            console.error('Failed to reload model after settings change:', error);
+        }
+    };
+
     // ─── Render ───
     return (
         <FloatingWidget
             isExpanded={isExpanded}
+            isSettingsOpen={isSettingsOpen}
             isRecording={isRecording}
             isCapturing={isCapturing}
             isGenerating={isGenerating}
@@ -259,6 +286,8 @@ function App(): JSX.Element {
             onClearTranscript={handleClearTranscript}
             onClearAnswers={handleClearAnswers}
             onNavigateAnswer={handleNavigateAnswer}
+            onToggleSettings={handleToggleSettings}
+            onSettingsChanged={handleSettingsChanged}
             onClose={handleClose}
         />
     );

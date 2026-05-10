@@ -1,6 +1,6 @@
 # Quick setup script for downloading Whisper model
 
-Write-Host "🎙️ Whisper.cpp Model Downloader" -ForegroundColor Cyan
+Write-Host "[Whisper] Whisper.cpp Model Downloader" -ForegroundColor Cyan
 Write-Host ""
 
 $modelsDir = "native\whisper\models"
@@ -11,18 +11,22 @@ if (!(Test-Path $modelsDir)) {
 }
 
 # Model options
-Write-Host "Available models:" -ForegroundColor Yellow
-Write-Host "1. tiny.en   (75 MB)  - Fast, basic accuracy"
-Write-Host "2. base.en   (142 MB) - Good balance (RECOMMENDED for GTX 1650)"
-Write-Host "3. small.en  (466 MB) - Better accuracy"
+Write-Host "Available models and 4GB GPU Suitability:" -ForegroundColor Yellow
+Write-Host "1. tiny.en   (75 MB)   | ~400MB VRAM | Effortless - Extremely fast, basic accuracy"
+Write-Host "2. base.en   (142 MB)  | ~600MB VRAM | Recommended - Best balance of speed & low VRAM impact"
+Write-Host "3. small.en  (466 MB)  | ~1.5GB VRAM | Recommended - High accuracy, but uses more VRAM"
+Write-Host "4. medium.en (1.5 GB)  | ~3.0GB VRAM | Warning - Usable, but leaves little VRAM for games/apps"
+Write-Host "5. large-v3  (2.9 GB)  | ~4.5GB+VRAM | Not Recommended - Will likely OOM on 4GB GPU"
 Write-Host ""
 
-$choice = Read-Host "Select model (1-3)"
+$choice = Read-Host "Select model (1-5)"
 
 $modelName = switch ($choice) {
     "1" { "tiny.en" }
     "2" { "base.en" }
     "3" { "small.en" }
+    "4" { "medium.en" }
+    "5" { "large-v3" }
     default { "base.en" }
 }
 
@@ -37,14 +41,14 @@ Write-Host ""
 
 try {
     Invoke-WebRequest -Uri $url -OutFile $filePath -UseBasicParsing
-    Write-Host "✓ Downloaded successfully!" -ForegroundColor Green
+    Write-Host "[OK] Downloaded successfully!" -ForegroundColor Green
     Write-Host "Location: $filePath"
     Write-Host ""
     Write-Host "File size: $((Get-Item $filePath).Length / 1MB) MB"
 } catch {
-    Write-Host "✗ Download failed: $_" -ForegroundColor Red
+    Write-Host "[Error] Download failed: $_" -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
-Write-Host "🎉 Model ready! Now you need whisper.exe (see docs/WHISPER_NATIVE_SETUP.md)" -ForegroundColor Cyan
+Write-Host "[Done] Model ready! Now you need whisper.exe (see docs/WHISPER_NATIVE_SETUP.md)" -ForegroundColor Cyan

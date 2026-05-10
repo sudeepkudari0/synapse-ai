@@ -2,11 +2,13 @@ import { useRef, useEffect } from 'react';
 import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
 import { AnswerPanel, Answer } from './AnswerPanel';
+import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import './FloatingWidget.css';
 
 interface FloatingWidgetProps {
     // State
     isExpanded: boolean;
+    isSettingsOpen: boolean;
     isRecording: boolean;
     isCapturing: boolean;
     isGenerating: boolean;
@@ -25,11 +27,14 @@ interface FloatingWidgetProps {
     onClearTranscript: () => void;
     onClearAnswers: () => void;
     onNavigateAnswer: (index: number) => void;
+    onToggleSettings: () => void;
+    onSettingsChanged: () => void;
     onClose: () => void;
 }
 
 export function FloatingWidget({
     isExpanded,
+    isSettingsOpen,
     isRecording,
     isCapturing,
     isGenerating,
@@ -46,6 +51,8 @@ export function FloatingWidget({
     onClearTranscript,
     onClearAnswers,
     onNavigateAnswer,
+    onToggleSettings,
+    onSettingsChanged,
     onClose,
 }: FloatingWidgetProps) {
     const widgetRef = useRef<HTMLDivElement>(null);
@@ -104,44 +111,55 @@ export function FloatingWidget({
                     onToggleExpanded={onToggleExpanded}
                     onCaptureScreen={onCaptureScreen}
                     onGenerateAnswer={onGenerateAnswer}
+                    onOpenSettings={onToggleSettings}
                     onClose={onClose}
                 />
 
                 {/* Expandable content */}
                 <div className="widget-body">
-                    {/* Loading indicator */}
-                    {isModelLoading && (
-                        <div className="px-4 py-3 border-t border-[var(--border-subtle)] animate-slide-up">
-                            <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-pulse" />
-                                <span className="text-xs text-[var(--text-secondary)]">Loading Whisper model...</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Error display */}
-                    {modelError && (
-                        <div className="px-4 py-3 border-t border-[var(--border-subtle)] animate-slide-up">
-                            <div className="px-3 py-2 rounded-lg bg-[var(--accent-red-dim)] border border-[var(--accent-red)]/20">
-                                <p className="text-xs text-[var(--accent-red)]">{modelError}</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Transcript panel */}
-                    <TranscriptPanel
-                        transcript={transcript}
-                        onClear={onClearTranscript}
-                    />
-
-                    {/* Answer panel */}
-                    {answers.length > 0 && (
-                        <AnswerPanel
-                            answers={answers}
-                            currentIndex={currentAnswerIndex}
-                            onNavigate={onNavigateAnswer}
-                            onClear={onClearAnswers}
+                    {/* Settings Panel overrides other content when open */}
+                    {isSettingsOpen ? (
+                        <SettingsPanel 
+                            onClose={onToggleSettings} 
+                            onSettingsChanged={onSettingsChanged} 
                         />
+                    ) : (
+                        <>
+                            {/* Loading indicator */}
+                            {isModelLoading && (
+                                <div className="px-4 py-3 border-t border-[var(--border-subtle)] animate-slide-up">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-pulse" />
+                                        <span className="text-xs text-[var(--text-secondary)]">Loading Whisper model...</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Error display */}
+                            {modelError && (
+                                <div className="px-4 py-3 border-t border-[var(--border-subtle)] animate-slide-up">
+                                    <div className="px-3 py-2 rounded-lg bg-[var(--accent-red-dim)] border border-[var(--accent-red)]/20">
+                                        <p className="text-xs text-[var(--accent-red)]">{modelError}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Transcript panel */}
+                            <TranscriptPanel
+                                transcript={transcript}
+                                onClear={onClearTranscript}
+                            />
+
+                            {/* Answer panel */}
+                            {answers.length > 0 && (
+                                <AnswerPanel
+                                    answers={answers}
+                                    currentIndex={currentAnswerIndex}
+                                    onNavigate={onNavigateAnswer}
+                                    onClear={onClearAnswers}
+                                />
+                            )}
+                        </>
                     )}
                 </div>
             </div>

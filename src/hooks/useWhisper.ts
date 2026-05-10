@@ -6,7 +6,7 @@ interface UseWhisperReturn {
     isModelLoaded: boolean;
     modelError: string;
     transcribe: (audioData: Float32Array) => Promise<string>;
-    loadModel: () => Promise<void>;
+    loadModel: (forceReload?: boolean) => Promise<void>;
 }
 
 export function useWhisper(): UseWhisperReturn {
@@ -15,9 +15,9 @@ export function useWhisper(): UseWhisperReturn {
     const [modelError, setModelError] = useState('');
     const isLoadingRef = useRef(false);
 
-    const loadModel = useCallback(async () => {
+    const loadModel = useCallback(async (forceReload: boolean = false) => {
         // Prevent multiple simultaneous loads
-        if (isLoadingRef.current || isModelLoaded) {
+        if (isLoadingRef.current || (!forceReload && isModelLoaded)) {
             return;
         }
 
@@ -31,7 +31,10 @@ export function useWhisper(): UseWhisperReturn {
                 throw new Error('Electron API not available. Preload script may not have loaded correctly.');
             }
 
-            const result = await window.electronAPI.whisper.loadModel('small.en');
+            const settingsRes = await window.electronAPI.getSettings();
+            const modelName = settingsRes.success && settingsRes.settings ? settingsRes.settings.whisperModel : 'small.en';
+            
+            const result = await window.electronAPI.whisper.loadModel(modelName);
 
             if (result.success) {
                 logger.info('Whisper model loaded successfully');

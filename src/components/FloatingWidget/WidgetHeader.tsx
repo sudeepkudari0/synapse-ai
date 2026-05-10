@@ -1,4 +1,4 @@
-import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { PulsingDot } from '../shared/PulsingDot';
 import { useDrag } from '../../hooks/useDrag';
@@ -14,6 +14,7 @@ interface WidgetHeaderProps {
     onToggleExpanded: () => void;
     onCaptureScreen: () => void;
     onGenerateAnswer: () => void;
+    onOpenSettings: () => void;
     onClose: () => void;
 }
 
@@ -28,6 +29,7 @@ export function WidgetHeader({
     onToggleExpanded,
     onCaptureScreen,
     onGenerateAnswer,
+    onOpenSettings,
     onClose,
 }: WidgetHeaderProps) {
     const { onMouseDown } = useDrag();
@@ -100,6 +102,15 @@ export function WidgetHeader({
                     ) : (
                         <Sparkles className="w-4 h-4" />
                     )}
+                </IconButton>
+
+                {/* Settings */}
+                <IconButton
+                    id="btn-open-settings"
+                    onClick={onOpenSettings}
+                    title="Settings"
+                >
+                    <Settings className="w-4 h-4" />
                 </IconButton>
 
                 {/* Divider */}

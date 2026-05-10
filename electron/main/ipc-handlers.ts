@@ -2,8 +2,11 @@ import { ipcMain, app, globalShortcut } from 'electron';
 import { getTranscriber } from './whisper/transcriber';
 import { IPC_CHANNELS } from '../types/ipc';
 import { BrowserWindow } from 'electron';
+import path from 'path';
+import fs from 'fs';
 
 export function registerIPCHandlers(): void {
+
 
     // Load Whisper model
     ipcMain.handle(IPC_CHANNELS.WHISPER_LOAD_MODEL, async (event, modelName: string) => {
@@ -261,6 +264,52 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error',
             };
+        }
+    });
+
+    // Settings
+    ipcMain.handle(IPC_CHANNELS.GET_SETTINGS, async () => {
+        try {
+            const { getSettings } = await import('./settings');
+            return { success: true, settings: getSettings() };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.UPDATE_SETTINGS, async (event, settings: any) => {
+        try {
+            const { saveSettings } = await import('./settings');
+            const { resetLLMService } = await import('./llm/llm-service');
+            const updated = saveSettings(settings);
+            
+            // Clear the old singleton to force re-reading new keys
+            resetLLMService();
+            
+            return { success: true, settings: updated };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    // Get available models
+    ipcMain.handle(IPC_CHANNELS.GET_AVAILABLE_MODELS, async () => {
+        try {
+            const basePath = app.isPackaged 
+                ? path.join(process.resourcesPath, 'whisper', 'models')
+                : path.join(app.getAppPath(), 'native', 'whisper', 'models');
+            
+            if (!fs.existsSync(basePath)) return { success: true, models: [] };
+            
+            const files = fs.readdirSync(basePath);
+            const models = files
+                .filter((f: string) => f.startsWith('ggml-') && f.endsWith('.bin'))
+                .map((f: string) => f.replace('ggml-', '').replace('.bin', ''));
+            
+            return { success: true, models };
+        } catch (error) {
+            console.error('Failed to get available models:', error);
+            return { success: false, models: [] };
         }
     });
 

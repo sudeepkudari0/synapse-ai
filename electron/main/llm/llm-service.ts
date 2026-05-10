@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
+import { getSettings } from '../settings';
 
 /**
  * LLM generation options
@@ -45,38 +46,45 @@ export class LLMService {
     };
 
     constructor(config?: Partial<LLMConfig>) {
-        // Strip quotes if they exist in the env vars
+        const settings = getSettings();
+        
+        // Strip quotes if they exist in the env vars (fallback to env if not in settings)
         const cleanKey = (key?: string) => key?.replace(/^["']|["']$/g, '');
-        const geminiApiKey = cleanKey(process.env.GEMINI_API_KEY);
-        const groqApiKey = cleanKey(process.env.GROQ_API_KEY);
+        const geminiApiKey = cleanKey(settings.geminiApiKey || process.env.GEMINI_API_KEY);
+        const groqApiKey = cleanKey(settings.groqApiKey || process.env.GROQ_API_KEY);
 
-        console.log("gemini api key", geminiApiKey);
-        console.log("groq api key", groqApiKey);
+        console.log("gemini api key available:", !!geminiApiKey);
+        console.log("groq api key available:", !!groqApiKey);
 
-        if (!geminiApiKey || !groqApiKey) {
-            throw new Error(
-                `Missing API keys. Both GEMINI_API_KEY and GROQ_API_KEY must be set in the environment. ` +
-                `Found Gemini: ${!!geminiApiKey}, Found Groq: ${!!groqApiKey}`
-            );
+        if (!geminiApiKey && !groqApiKey) {
+            console.warn(`[LLMService] Warning: No API keys configured in settings. Go to settings to add them.`);
         }
 
         this.config = {
-            geminiApiKey,
-            groqApiKey,
+            geminiApiKey: geminiApiKey || '',
+            groqApiKey: groqApiKey || '',
             geminiModel: process.env.GEMINI_MODEL || LLMService.DEFAULT_MODELS.gemini,
             groqModel: process.env.GROQ_MODEL || LLMService.DEFAULT_MODELS.groq,
         };
 
         // Initialize Gemini
-        this.geminiClient = new GoogleGenAI({
-            apiKey: this.config.geminiApiKey,
-        });
+        if (this.config.geminiApiKey) {
+            this.geminiClient = new GoogleGenAI({
+                apiKey: this.config.geminiApiKey,
+            });
+        } else {
+            this.geminiClient = null as any;
+        }
 
         // Initialize Groq (via OpenAI SDK pointing to GroqCloud)
-        this.groqClient = new OpenAI({
-            apiKey: this.config.groqApiKey,
-            baseURL: 'https://api.groq.com/openai/v1',
-        });
+        if (this.config.groqApiKey) {
+            this.groqClient = new OpenAI({
+                apiKey: this.config.groqApiKey,
+                baseURL: 'https://api.groq.com/openai/v1',
+            });
+        } else {
+            this.groqClient = null as any;
+        }
     }
 
     /**
@@ -99,9 +107,11 @@ export class LLMService {
      */
     private async generateTextWithFallback(options: LLMOptions): Promise<string> {
         try {
+            if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
             console.log('[LLMService] Trying Gemini...');
             return await this.generateGemini(options);
         } catch (error) {
+            if (!this.groqClient) throw new Error("Both Gemini and Groq API keys are missing in settings");
             console.error('[LLMService] Gemini failed:', error, '- Falling back to Groq...');
             return await this.generateGroq(options);
         }
@@ -112,6 +122,7 @@ export class LLMService {
      */
     private async *streamGenerateWithFallback(options: LLMOptions): AsyncIterable<string> {
         try {
+            if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
             console.log('[LLMService] Trying Gemini (Stream)...');
             const stream = this.streamGemini(options);
             const iterator = stream[Symbol.asyncIterator]();
@@ -141,6 +152,7 @@ export class LLMService {
         }
 
         // Fallback to Groq if Gemini failed
+        if (!this.groqClient) throw new Error("Both Gemini and Groq API keys are missing in settings");
         console.log('[LLMService] Trying Groq (Stream)...');
         yield* this.streamGroq(options);
     }

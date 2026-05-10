@@ -11,6 +11,9 @@ const IPC_CHANNELS = {
     CAPTURE_SCREEN: 'screen:capture',
     ANALYZE_SCREEN: 'screen:analyze',
     CAPTURE_AND_ANALYZE: 'screen:capture-and-analyze',
+    GET_SETTINGS: 'settings:get',
+    UPDATE_SETTINGS: 'settings:update',
+    GET_AVAILABLE_MODELS: 'models:get-available',
     QUIT_APP: 'app:quit',
 } as const;
 
@@ -76,6 +79,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // App control API
     quitApp: async () => {
         return await ipcRenderer.invoke(IPC_CHANNELS.QUIT_APP);
+    },
+
+    // Settings API
+    getSettings: async () => {
+        return await ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS);
+    },
+    
+    updateSettings: async (settings: any) => {
+        return await ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, settings);
+    },
+    
+    getAvailableModels: async () => {
+        return await ipcRenderer.invoke(IPC_CHANNELS.GET_AVAILABLE_MODELS);
     },
 
     // Shortcut listeners — renderer subscribes to global shortcut events
