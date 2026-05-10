@@ -23,6 +23,66 @@ export function registerIPCHandlers(): void {
         }
     });
 
+    // Download Whisper model
+    ipcMain.handle(IPC_CHANNELS.DOWNLOAD_WHISPER_MODEL, async (event, modelName: string) => {
+        return new Promise((resolve) => {
+            const https = require('https');
+            const url = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${modelName}.bin`;
+            const destDir = path.join(app.getPath('userData'), 'whisper-models');
+            
+            if (!fs.existsSync(destDir)) {
+                fs.mkdirSync(destDir, { recursive: true });
+            }
+            
+            const destPath = path.join(destDir, `ggml-${modelName}.bin`);
+            const file = fs.createWriteStream(destPath);
+            
+            https.get(url, (response: any) => {
+                if (response.statusCode === 301 || response.statusCode === 302) {
+                    // Handle redirect
+                    https.get(response.headers.location, (redirectResponse: any) => {
+                        handleDownload(redirectResponse);
+                    }).on('error', handleError);
+                } else {
+                    handleDownload(response);
+                }
+                
+                function handleDownload(res: any) {
+                    if (res.statusCode !== 200) {
+                        file.close();
+                        fs.unlink(destPath, () => {}); // Delete temp file
+                        resolve({ success: false, error: `Server returned ${res.statusCode}` });
+                        return;
+                    }
+                    
+                    const totalLen = parseInt(res.headers['content-length'] || '0', 10);
+                    let downloaded = 0;
+                    
+                    res.on('data', (chunk: Buffer) => {
+                        downloaded += chunk.length;
+                        if (totalLen > 0) {
+                            const percent = Math.round((downloaded / totalLen) * 100);
+                            event.sender.send('whisper:download-progress', { progress: percent });
+                        }
+                    });
+                    
+                    res.pipe(file);
+                    
+                    file.on('finish', () => {
+                        file.close();
+                        resolve({ success: true });
+                    });
+                }
+            }).on('error', handleError);
+            
+            function handleError(err: Error) {
+                file.close();
+                fs.unlink(destPath, () => {}); // Delete temp file
+                resolve({ success: false, error: err.message });
+            }
+        });
+    });
+
     // Transcribe audio
     ipcMain.handle(IPC_CHANNELS.WHISPER_TRANSCRIBE, async (event, audioData: number[]) => {
         try {
@@ -348,18 +408,23 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
     // Get available models
     ipcMain.handle(IPC_CHANNELS.GET_AVAILABLE_MODELS, async () => {
         try {
-            const basePath = app.isPackaged 
-                ? path.join(process.resourcesPath, 'whisper', 'models')
-                : path.join(app.getAppPath(), 'native', 'whisper', 'models');
+            const dirs = [
+                app.isPackaged 
+                    ? path.join(process.resourcesPath, 'whisper', 'models')
+                    : path.join(app.getAppPath(), 'native', 'whisper', 'models'),
+                path.join(app.getPath('userData'), 'whisper-models')
+            ];
             
-            if (!fs.existsSync(basePath)) return { success: true, models: [] };
+            const allModels = new Set<string>();
+            for (const dir of dirs) {
+                if (fs.existsSync(dir)) {
+                    const files = fs.readdirSync(dir);
+                    files.filter((f: string) => f.startsWith('ggml-') && f.endsWith('.bin'))
+                         .forEach((f: string) => allModels.add(f.replace('ggml-', '').replace('.bin', '')));
+                }
+            }
             
-            const files = fs.readdirSync(basePath);
-            const models = files
-                .filter((f: string) => f.startsWith('ggml-') && f.endsWith('.bin'))
-                .map((f: string) => f.replace('ggml-', '').replace('.bin', ''));
-            
-            return { success: true, models };
+            return { success: true, models: Array.from(allModels) };
         } catch (error) {
             console.error('Failed to get available models:', error);
             return { success: false, models: [] };

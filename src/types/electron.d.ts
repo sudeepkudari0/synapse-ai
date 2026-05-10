@@ -13,6 +13,7 @@ interface WhisperAPI {
         modelPath?: string;
         error?: string;
     }>;
+    downloadModel: (modelName: string, onProgress: (progress: number) => void) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface DesktopSource {

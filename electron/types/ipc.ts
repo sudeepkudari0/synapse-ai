@@ -66,4 +66,5 @@ export const IPC_CHANNELS = {
     GET_AVAILABLE_MODELS: 'models:get-available',
     TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
+    DOWNLOAD_WHISPER_MODEL: 'whisper:download-model',
 } as const;

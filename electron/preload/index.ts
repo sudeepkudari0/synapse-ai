@@ -16,6 +16,7 @@ const IPC_CHANNELS = {
     GET_AVAILABLE_MODELS: 'models:get-available',
     TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
+    DOWNLOAD_WHISPER_MODEL: 'whisper:download-model',
 } as const;
 
 // Expose protected methods to renderer process
@@ -51,6 +52,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
         getStatus: async () => {
             return await ipcRenderer.invoke(IPC_CHANNELS.WHISPER_STATUS);
+        },
+
+        downloadModel: async (modelName: string, onProgress: (progress: number) => void) => {
+            const progressHandler = (_event: any, data: { progress: number }) => onProgress(data.progress);
+            ipcRenderer.on('whisper:download-progress', progressHandler);
+            try {
+                return await ipcRenderer.invoke(IPC_CHANNELS.DOWNLOAD_WHISPER_MODEL, modelName);
+            } finally {
+                ipcRenderer.removeListener('whisper:download-progress', progressHandler);
+            }
         },
     },
 

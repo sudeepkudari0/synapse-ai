@@ -44,9 +44,6 @@ export function createMainWindow(): BrowserWindow {
     const isPackaged = app.isPackaged;
     const isDev = !isPackaged && process.env.NODE_ENV !== 'production';
 
-    // Enable content protection (excludes from screen capture on Windows)
-    mainWindow.setContentProtection(true);
-
     // Grant media permissions for audio capture
     mainWindow.webContents.session.setPermissionRequestHandler(
         (webContents, permission, callback) => {
@@ -64,6 +61,17 @@ export function createMainWindow(): BrowserWindow {
         // Enable click-through by default — transparent areas pass clicks to underlying apps.
         // The renderer toggles this off when cursor enters interactive UI elements.
         mainWindow.setIgnoreMouseEvents(true, { forward: true });
+
+        // Apply content protection after the window is shown.
+        // On Windows, calling this before the window is fully visible often fails
+        // to register the WDA_EXCLUDEFROMCAPTURE flag correctly.
+        setTimeout(() => {
+            if (!mainWindow.isDestroyed()) {
+                // Toggle to ensure the OS registers the change
+                mainWindow.setContentProtection(false);
+                mainWindow.setContentProtection(true);
+            }
+        }, 100);
     });
 
     // Load the app

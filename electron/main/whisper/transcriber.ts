@@ -97,7 +97,15 @@ export class WhisperTranscriber {
         this.modelName = modelName;
         const basePath = resolveWhisperBasePath();
         this.serverExePath = path.join(basePath, 'whisper-server.exe');
-        this.modelPath = path.join(basePath, 'models', `ggml-${modelName}.bin`);
+        
+        // Try userData first
+        const userDataModelPath = path.join(app.getPath('userData'), 'whisper-models', `ggml-${modelName}.bin`);
+        if (fs.existsSync(userDataModelPath)) {
+            this.modelPath = userDataModelPath;
+        } else {
+            // Fallback to bundled
+            this.modelPath = path.join(basePath, 'models', `ggml-${modelName}.bin`);
+        }
 
         // Validate server binary exists
         if (!fs.existsSync(this.serverExePath)) {

@@ -20,6 +20,12 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
+    const [downloadProgress, setDownloadProgress] = useState<number>(0);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
+    const [selectedDownload, setSelectedDownload] = useState('base.en');
+
+    const downloadableModels = ['tiny.en', 'base.en', 'small.en', 'medium.en'];
 
     useEffect(() => {
         loadData();
@@ -77,6 +83,26 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             setTestResult({ success: false, message: `Test error: ${error}` });
         } finally {
             setIsTesting(false);
+        }
+    };
+
+    const handleDownloadModel = async () => {
+        setDownloadingModel(selectedDownload);
+        setDownloadProgress(0);
+        setDownloadError(null);
+        try {
+            const result = await window.electronAPI.whisper.downloadModel(selectedDownload, (progress) => {
+                setDownloadProgress(progress);
+            });
+            if (result.success) {
+                await loadData(); // refresh models list
+            } else {
+                setDownloadError(result.error || 'Download failed');
+            }
+        } catch (err: any) {
+            setDownloadError(err.message || 'Download failed');
+        } finally {
+            setDownloadingModel(null);
         }
     };
 
@@ -141,8 +167,50 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                     )}
                                 </select>
                                 <p className="mt-2 text-xs text-zinc-500">
-                                    Select the transcription model to use. You must download models using the setup script first.
+                                    Select the installed transcription model to use.
                                 </p>
+                            </div>
+                            
+                            <div className="pt-4 border-t border-zinc-800">
+                                <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                    Download New Model
+                                </label>
+                                <div className="flex gap-2 mb-2">
+                                    <select
+                                        value={selectedDownload}
+                                        onChange={(e) => setSelectedDownload(e.target.value)}
+                                        disabled={downloadingModel !== null}
+                                        className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                    >
+                                        {downloadableModels.map(m => (
+                                            <option key={m} value={m}>{m}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={handleDownloadModel}
+                                        disabled={downloadingModel !== null || models.includes(selectedDownload)}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                        {models.includes(selectedDownload) ? 'Installed' : 'Download'}
+                                    </button>
+                                </div>
+                                {downloadingModel && (
+                                    <div className="mt-2">
+                                        <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                                            <span>Downloading {downloadingModel}...</span>
+                                            <span>{downloadProgress}%</span>
+                                        </div>
+                                        <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                                            <div 
+                                                className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
+                                                style={{ width: `${downloadProgress}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                                {downloadError && (
+                                    <p className="mt-2 text-xs text-red-400">{downloadError}</p>
+                                )}
                             </div>
                         </div>
                     ) : (

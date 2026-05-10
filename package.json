@@ -43,7 +43,11 @@
     "extraResources": [
       {
         "from": "native/whisper",
-        "to": "whisper"
+        "to": "whisper",
+        "filter": [
+          "**/*",
+          "!models/**/*"
+        ]
       },
       {
         "from": ".env",
