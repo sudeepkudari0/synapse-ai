@@ -40,8 +40,8 @@ export class LLMService {
 
     // Default models
     private static readonly DEFAULT_MODELS = {
-        gemini: 'gemini-2.0-flash-exp', // Supports vision
-        groq: 'llama-3.2-90b-vision-preview', // Supports vision
+        gemini: 'gemini-2.0-flash', // Supports vision
+        groq: 'llama-4-scout-17b-16e-instruct', // Supports vision
     };
 
     constructor(config?: Partial<LLMConfig>) {

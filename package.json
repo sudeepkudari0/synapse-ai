@@ -1,7 +1,7 @@
 {
-  "name": "electro-hid-overlay",
+  "name": "synapse-ai",
   "version": "1.0.0",
-  "description": "Minimal Windows Electron overlay app with React + Vite",
+  "description": "AI-powered interview assistant with real-time screen analysis and intelligent suggestions",
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"bun run build:electron\" \"wait-on http://localhost:5173 && electron .\"",
@@ -31,8 +31,8 @@
   "author": "",
   "license": "ISC",
   "build": {
-    "appId": "com.electrohid.overlay",
-    "productName": "Electro HID Overlay",
+    "appId": "com.synapse.ai",
+    "productName": "Synapse AI",
     "asar": false,
     "files": [
       "dist/**/*",
@@ -44,6 +44,10 @@
       {
         "from": "native/whisper",
         "to": "whisper"
+      },
+      {
+        "from": ".env",
+        "to": ".env"
       }
     ],
     "directories": {
@@ -57,6 +61,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
@@ -66,7 +76,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "shortcutName": "Synapse AI"
+    },
+    "portable": {
+      "artifactName": "SynapseAI-Portable-${version}.${ext}"
     }
   },
   "devDependencies": {
@@ -80,6 +94,7 @@
     "electron-builder": "^26.0.12",
     "esbuild": "^0.27.1",
     "playwright": "^1.57.0",
+    "png-to-ico": "^3.0.1",
     "postcss": "^8.5.6",
     "tailwindcss": "3",
     "tsx": "^4.21.0",
