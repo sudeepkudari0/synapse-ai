@@ -3,6 +3,7 @@ import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
 import { AnswerPanel, Answer } from './AnswerPanel';
 import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
+import { ChatPanel } from '../ChatPanel/ChatPanel';
 import { ChatBlock } from '../../App';
 import './FloatingWidget.css';
 
@@ -10,6 +11,7 @@ interface FloatingWidgetProps {
     // State
     isExpanded: boolean;
     isSettingsOpen: boolean;
+    isChatOpen: boolean;
     isRecording: boolean;
     isCapturing: boolean;
     isGenerating: boolean;
@@ -29,6 +31,7 @@ interface FloatingWidgetProps {
     onClearAnswers: () => void;
     onNavigateAnswer: (index: number) => void;
     onToggleSettings: () => void;
+    onToggleChat: () => void;
     onSettingsChanged: () => void;
     onClose: () => void;
 }
@@ -36,6 +39,7 @@ interface FloatingWidgetProps {
 export function FloatingWidget({
     isExpanded,
     isSettingsOpen,
+    isChatOpen,
     isRecording,
     isCapturing,
     isGenerating,
@@ -53,6 +57,7 @@ export function FloatingWidget({
     onClearAnswers,
     onNavigateAnswer,
     onToggleSettings,
+    onToggleChat,
     onSettingsChanged,
     onClose,
 }: FloatingWidgetProps) {
@@ -113,17 +118,20 @@ export function FloatingWidget({
                     onCaptureScreen={onCaptureScreen}
                     onGenerateAnswer={onGenerateAnswer}
                     onOpenSettings={onToggleSettings}
+                    onToggleChat={onToggleChat}
                     onClose={onClose}
                 />
 
                 {/* Expandable content */}
                 <div className="widget-body">
-                    {/* Settings Panel overrides other content when open */}
+                    {/* Settings/Chat Panels override other content when open */}
                     {isSettingsOpen ? (
                         <SettingsPanel 
                             onClose={onToggleSettings} 
                             onSettingsChanged={onSettingsChanged} 
                         />
+                    ) : isChatOpen ? (
+                        <ChatPanel onClose={onToggleChat} />
                     ) : (
                         <>
                             {/* Loading indicator */}

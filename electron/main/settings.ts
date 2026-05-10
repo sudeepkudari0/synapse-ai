@@ -16,7 +16,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     geminiApiKey: '',
     groqApiKey: '',
     useOllamaOnly: false,
-    ollamaModel: 'qwen2.5-vl',
+    ollamaModel: 'qwen3-vl:2b',
     ollamaBaseUrl: 'http://localhost:11434/v1',
 };
 

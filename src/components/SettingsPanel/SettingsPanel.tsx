@@ -14,7 +14,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         geminiApiKey: '',
         groqApiKey: '',
         useOllamaOnly: false,
-        ollamaModel: 'qwen2.5-vl',
+        ollamaModel: 'qwen3-vl:2b',
         ollamaBaseUrl: 'http://localhost:11434/v1'
     });
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -39,7 +39,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     geminiApiKey: settingsRes.settings.geminiApiKey || '',
                     groqApiKey: settingsRes.settings.groqApiKey || '',
                     useOllamaOnly: settingsRes.settings.useOllamaOnly || false,
-                    ollamaModel: settingsRes.settings.ollamaModel || 'qwen2.5-vl',
+                    ollamaModel: settingsRes.settings.ollamaModel || 'qwen3-vl:2b',
                     ollamaBaseUrl: settingsRes.settings.ollamaBaseUrl || 'http://localhost:11434/v1'
                 });
             }
@@ -214,7 +214,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                             onChange={(e) => setSettings({ ...settings, ollamaModel: e.target.value })}
                                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         >
-                                            <option value="qwen2.5-vl">qwen2.5-vl (Vision - Recommended)</option>
+                                            <option value="qwen3-vl:2b">qwen3-vl:2b (Vision - Recommended)</option>
+                                            <option value="qwen3-vl:2b-instruct">qwen3-vl:2b-instruct (Vision - Direct)</option>
                                             <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b (Coding & Text)</option>
                                             <option value="deepseek-r1:1.5b">deepseek-r1:1.5b (Reasoning)</option>
                                             <option value="llama3.2-vision">llama3.2-vision (Vision)</option>

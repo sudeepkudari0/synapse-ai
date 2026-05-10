@@ -16,6 +16,7 @@ function App(): JSX.Element {
     // ─── Widget state ───
     const [isExpanded, setIsExpanded] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isChatOpen, setIsChatOpen] = useState(false);
 
     // ─── Transcription state ───
     const [conversation, setConversation] = useState<ChatBlock[]>([]);
@@ -183,19 +184,36 @@ function App(): JSX.Element {
 
     const handleToggleExpanded = useCallback(() => {
         setIsExpanded(prev => {
-            if (prev && isSettingsOpen) {
-                // If closing widget, close settings too
+            if (prev && (isSettingsOpen || isChatOpen)) {
+                // If closing widget, close settings and chat too
                 setIsSettingsOpen(false);
+                setIsChatOpen(false);
             }
             return !prev;
         });
-    }, [isSettingsOpen]);
+    }, [isSettingsOpen, isChatOpen]);
 
     const handleToggleSettings = useCallback(() => {
         setIsSettingsOpen(prev => {
             const willBeOpen = !prev;
-            if (willBeOpen && !isExpanded) {
-                setIsExpanded(true); // Open widget if settings are opened
+            if (willBeOpen) {
+                setIsChatOpen(false);
+                if (!isExpanded) {
+                    setIsExpanded(true); // Open widget if settings are opened
+                }
+            }
+            return willBeOpen;
+        });
+    }, [isExpanded]);
+
+    const handleToggleChat = useCallback(() => {
+        setIsChatOpen(prev => {
+            const willBeOpen = !prev;
+            if (willBeOpen) {
+                setIsSettingsOpen(false);
+                if (!isExpanded) {
+                    setIsExpanded(true); // Open widget if chat is opened
+                }
             }
             return willBeOpen;
         });
@@ -404,6 +422,7 @@ function App(): JSX.Element {
         <FloatingWidget
             isExpanded={isExpanded}
             isSettingsOpen={isSettingsOpen}
+            isChatOpen={isChatOpen}
             isRecording={isRecording}
             isCapturing={isCapturing}
             isGenerating={isGenerating}
@@ -421,6 +440,7 @@ function App(): JSX.Element {
             onClearAnswers={handleClearAnswers}
             onNavigateAnswer={handleNavigateAnswer}
             onToggleSettings={handleToggleSettings}
+            onToggleChat={handleToggleChat}
             onSettingsChanged={handleSettingsChanged}
             onClose={handleClose}
         />

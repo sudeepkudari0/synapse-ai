@@ -97,7 +97,7 @@ export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: Answ
             {/* Answer content */}
             <div
                 ref={scrollRef}
-                className="px-4 py-3 max-h-[300px] overflow-y-auto"
+                className="px-4 py-3 max-h-[300px] overflow-y-auto select-text"
             >
                 {/* Question/context */}
                 {current.question && current.source === 'transcript' && (

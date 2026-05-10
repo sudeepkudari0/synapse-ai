@@ -47,12 +47,12 @@ export class LLMService {
     private static readonly DEFAULT_MODELS = {
         gemini: 'gemini-2.0-flash', // Supports vision
         groq: 'llama-4-scout-17b-16e-instruct', // Supports vision
-        ollama: 'qwen2.5-vl', // Default local model
+        ollama: 'qwen3-vl:2b', // Default local model
     };
 
     constructor(config?: Partial<LLMConfig>) {
         const settings = getSettings();
-        
+
         // Strip quotes if they exist in the env vars (fallback to env if not in settings)
         const cleanKey = (key?: string) => key?.replace(/^["']|["']$/g, '');
         const geminiApiKey = cleanKey(settings.geminiApiKey || process.env.GEMINI_API_KEY);
@@ -337,91 +337,148 @@ export class LLMService {
 
     private async generateOllama(options: LLMOptions): Promise<string> {
         const directSystemPrompt = options.systemPrompt + "\n\nCRITICAL: Do not include any internal thought process, reasoning steps, or preamble. Provide only the direct answer.";
-        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+
+        const messages: any[] = [
             { role: 'system', content: directSystemPrompt },
         ];
 
         if (options.imageData) {
+            const rawBase64 = options.imageData.replace(/^data:image\/\w+;base64,/, '');
             messages.push({
                 role: 'user',
-                content: [
-                    { type: 'text', text: options.prompt },
-                    {
-                        type: 'image_url',
-                        image_url: {
-                            url: `data:image/png;base64,${options.imageData}`,
-                        },
-                    },
-                ],
+                content: options.prompt,
+                images: [rawBase64], // Ollama native API expects base64 without data URI prefix
             });
         } else {
             messages.push({ role: 'user', content: options.prompt });
         }
 
         try {
-            const response = await this.ollamaClient.chat.completions.create({
-                model: this.config.ollamaModel,
-                messages,
-                temperature: 0, // Force 0 for immediate, deterministic answers
-                max_tokens: options.maxTokens,
-                // @ts-ignore - Ollama specific parameter
-                think: false,
+            const baseUrl = this.config.ollamaBaseUrl.replace(/\/v1\/?$/, '');
+            const response = await fetch(`${baseUrl}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: this.config.ollamaModel,
+                    messages,
+                    stream: false,
+                    think: false, // This natively disables thinking for Qwen3-VL/DeepSeek-R1 in Ollama
+                    options: {
+                        temperature: 0,
+                        num_predict: options.maxTokens,
+                    }
+                })
             });
 
-            return response.choices[0]?.message?.content || '';
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Ollama API error (${response.status}): ${errText}`);
+            }
+
+            const data = await response.json() as any;
+            return data.message?.content || '';
         } catch (error: any) {
-            // Handle non-JSON responses (like 404 or 500 HTML pages from Ollama)
-            if (error.message && (error.message.includes('Unexpected token') || error.message.includes('valid JSON'))) {
-                throw new Error(`Ollama model "${this.config.ollamaModel}" not found or Ollama server returned an error. Please check if the model is pulled and Ollama is running.`);
+            if (error.message && (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED'))) {
+                throw new Error(`Ollama not reachable at ${this.config.ollamaBaseUrl}. Please ensure Ollama is running.`);
+            }
+            if (error.message && error.message.includes('not found')) {
+                throw new Error(`Ollama model "${this.config.ollamaModel}" not found. Please pull it first.`);
             }
             throw error;
         }
     }
 
     private async *streamOllama(options: LLMOptions): AsyncIterable<string> {
-        const directSystemPrompt = options.systemPrompt + "\n\nCRITICAL: Do not include any internal thought process, reasoning steps, or preamble. Provide only the direct answer.";
-        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        const directSystemPrompt = options.systemPrompt + "/no_think - Provide only the direct answer.";
+
+        const messages: any[] = [
             { role: 'system', content: directSystemPrompt },
         ];
 
         if (options.imageData) {
+            const rawBase64 = options.imageData.replace(/^data:image\/\w+;base64,/, '');
             messages.push({
                 role: 'user',
-                content: [
-                    { type: 'text', text: options.prompt },
-                    {
-                        type: 'image_url',
-                        image_url: {
-                            url: `data:image/png;base64,${options.imageData}`,
-                        },
-                    },
-                ],
+                content: options.prompt,
+                images: [rawBase64],
             });
         } else {
             messages.push({ role: 'user', content: options.prompt });
         }
 
         try {
-            const stream = await this.ollamaClient.chat.completions.create({
+            const baseUrl = this.config.ollamaBaseUrl.replace(/\/v1\/?$/, '');
+
+            const payload = {
                 model: this.config.ollamaModel,
                 messages,
-                temperature: 0, // Force 0 for immediate, deterministic answers
-                max_tokens: options.maxTokens,
                 stream: true,
-                // @ts-ignore - Ollama specific parameter
-                think: false,
+                think: false, // This natively disables thinking for Qwen3-VL/DeepSeek-R1 in Ollama
+                options: {
+                    temperature: 0,
+                    num_predict: options.maxTokens,
+                }
+            };
+
+            console.log(`[LLMService] Sending Ollama request to ${baseUrl}/api/chat with think: false, streaming enabled...`);
+
+            const response = await fetch(`${baseUrl}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
-            for await (const chunk of stream) {
-                const content = chunk.choices[0]?.delta?.content;
-                if (content) {
-                    yield content;
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Ollama API error (${response.status}): ${errText}`);
+            }
+
+            if (!response.body) {
+                throw new Error("No response body received from Ollama");
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    if (buffer.trim()) {
+                        try {
+                            const data = JSON.parse(buffer) as any;
+                            if (data.message?.content) yield data.message.content;
+                        } catch (e) { }
+                    }
+                    break;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                let newlineIdx;
+                while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+                    const line = buffer.slice(0, newlineIdx);
+                    buffer = buffer.slice(newlineIdx + 1);
+                    if (!line.trim()) continue;
+                    try {
+                        const data = JSON.parse(line) as any;
+                        if (data.message?.content) {
+                            yield data.message.content;
+                        } else if (data.message && typeof data.message.content === 'string') {
+                            // Empty string chunk
+                        } else if (data.error) {
+                            console.error(`[LLMService] stream error from Ollama:`, data.error);
+                        }
+                    } catch (e) {
+                        // ignore malformed JSON lines
+                    }
                 }
             }
         } catch (error: any) {
-            // Handle non-JSON responses (like 404 or 500 HTML pages from Ollama)
-            if (error.message && (error.message.includes('Unexpected token') || error.message.includes('valid JSON'))) {
-                throw new Error(`Ollama model "${this.config.ollamaModel}" not found or Ollama server returned an error. Please check if the model is pulled and Ollama is running.`);
+            if (error.message && (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED'))) {
+                throw new Error(`Ollama not reachable at ${this.config.ollamaBaseUrl}. Please ensure Ollama is running.`);
+            }
+            if (error.message && error.message.includes('not found')) {
+                throw new Error(`Ollama model "${this.config.ollamaModel}" not found. Please pull it first.`);
             }
             throw error;
         }

@@ -24,7 +24,8 @@ export function useLLM(options: LLMOptions = {}) {
         async (
             prompt: string,
             context?: string,
-            onChunk?: (chunk: string) => void
+            onChunk?: (chunk: string) => void,
+            imageData?: string
         ): Promise<string> => {
             setIsGenerating(true);
             setError(null);
@@ -50,6 +51,7 @@ Provide structured, professional answers that:
                     temperature: options.temperature ?? 0.7,
                     maxTokens: options.maxTokens ?? 512,
                     stream: !!onChunk,
+                    imageData,
                 }, onChunk);
 
                 if (response.success) {

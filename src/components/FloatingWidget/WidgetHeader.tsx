@@ -1,4 +1,4 @@
-import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings } from 'lucide-react';
+import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { PulsingDot } from '../shared/PulsingDot';
 import { useDrag } from '../../hooks/useDrag';
@@ -15,6 +15,7 @@ interface WidgetHeaderProps {
     onCaptureScreen: () => void;
     onGenerateAnswer: () => void;
     onOpenSettings: () => void;
+    onToggleChat: () => void;
     onClose: () => void;
 }
 
@@ -30,6 +31,7 @@ export function WidgetHeader({
     onCaptureScreen,
     onGenerateAnswer,
     onOpenSettings,
+    onToggleChat,
     onClose,
 }: WidgetHeaderProps) {
     const { onMouseDown } = useDrag();
@@ -111,6 +113,15 @@ export function WidgetHeader({
                     title="Settings"
                 >
                     <Settings className="w-4 h-4" />
+                </IconButton>
+
+                {/* Chat */}
+                <IconButton
+                    id="btn-toggle-chat"
+                    onClick={onToggleChat}
+                    title="AI Chat"
+                >
+                    <MessageCircle className="w-4 h-4" />
                 </IconButton>
 
                 {/* Divider */}

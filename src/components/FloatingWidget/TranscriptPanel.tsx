@@ -50,7 +50,7 @@ export function TranscriptPanel({ conversation, onClear }: TranscriptPanelProps)
             {/* Conversation list */}
             <div
                 ref={scrollRef}
-                className="px-4 py-3 max-h-[160px] overflow-y-auto space-y-3"
+                className="px-4 py-3 max-h-[160px] overflow-y-auto space-y-3 select-text"
             >
                 {conversation.map((block) => {
                     const isUser = block.speaker === 'user';
