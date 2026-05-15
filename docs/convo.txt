@@ -1,0 +1,3 @@
+Continuing Synapse AI implementation.
+Read docs/IMPLEMENTATION_PLAN.md and docs/IMPLEMENTATION_PLAN_PART2.md — find the first unchecked [ ] task and continue from there. Mark tasks [x] as you complete them. Do as many tasks as you can.
+That's it. The plans have enough context (project structure, tech stack, file paths, acceptance criteria) for any new conversation to pick up exactly where the last one stopped.
