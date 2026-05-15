@@ -36,3 +36,10 @@ playwright/.cache/
 # Model files
 models/*
 !models/.gitkeep
+
+# Native binaries
+native/whisper/*
+!native/whisper/.gitkeep
+!native/whisper/models/
+native/whisper/models/*
+!native/whisper/models/.gitkeep
