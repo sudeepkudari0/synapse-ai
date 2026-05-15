@@ -1,5 +1,5 @@
 # setup-whisper.ps1
-# Downloads whisper.cpp binary and model for Electro-HID
+# Downloads whisper.cpp binary and model for Synapse AI
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/setup-whisper.ps1
 
 param(

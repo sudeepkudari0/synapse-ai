@@ -1,138 +1,131 @@
-# Electro-HID - AI Interview Assistant
+# Synapse AI - AI Interview Assistant
 
-A privacy-first, offline AI interview assistant with real-time speech recognition and intelligent answer suggestions. Built with Electron, React, Whisper.cpp, and Llama.cpp.
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Electron](https://img.shields.io/badge/Electron-191970?logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-B73BFE?logo=vite&logoColor=FFD62E)](https://vitejs.dev/)
+
+Synapse AI is a privacy-first, offline AI interview assistant that provides real-time speech recognition and intelligent answer suggestions. It runs locally on your machine, ensuring complete privacy during your interviews. Built with an Electron desktop application, it overlays beautifully on top of your screen.
 
 ## ✨ Features
 
-- 🎤 **Local Speech Recognition** - Real-time transcription using Whisper.cpp (100% offline)
-- 🤖 **AI Answer Generation** - Get professional interview answers using local LLM (Llama.cpp)
-- 🪟 **Glassmorphism Overlays** - Beautiful, transparent UI inspired by Parakeet AI
-- 🎯 **Auto Question Detection** - Automatically detects when interviewer stops talking
-- 📝 **Q&A History** - Navigate through multiple interview questions and answers
-- ⏱️ **Session Timer** - Track your interview duration
-- 🎨 **Modern UI** - Sleek design with backdrop blur and dark theme
-- 🔒 **Privacy First** - Everything runs locally, no data leaves your machine
+- 🎤 **Local Speech Recognition** - Real-time transcription using Whisper.cpp (100% offline).
+- 🤖 **AI Answer Generation** - Get professional interview answers using local LLMs via Ollama.
+- 🪟 **Glassmorphism Overlays** - Beautiful, transparent UI that stays out of your way but provides answers right when you need them.
+- 🎯 **Auto Question Detection** - Automatically detects when the interviewer stops talking to capture the context seamlessly.
+- 📝 **Q&A History** - Navigate through multiple interview questions and your AI-generated answers.
+- ⏱️ **Session Timer** - Keep track of your interview duration.
+- 🎨 **Modern UI** - Sleek design with a backdrop blur and a focused dark theme.
+- 🔒 **Privacy First** - Everything runs locally. No cloud dependencies. No data leaves your machine.
 
-## Project Structure
+## 🏗️ Project Structure
 
-```
-electro-hid/
-├── electron/                 # Main process code
+```text
+synapse-ai/
+├── electron/                 # Main process code (Electron)
 │   ├── main/
-│   │   ├── index.ts         # Main entry point
-│   │   ├── window.ts        # Window management
-│   │   ├── ipc-handlers.ts  # IPC event handlers
-│   │   └── whisper/
-│   │       └── transcriber.ts # Whisper.cpp wrapper
-│   ├── preload/
-│   │   └── index.ts         # Preload script (IPC bridge)
-│   └── types/
-│       └── ipc.d.ts         # IPC type definitions
+│   │   ├── index.ts          # Main entry point
+│   │   ├── window.ts         # Window management and overlay setup
+│   │   ├── ipc-handlers.ts   # IPC event handlers for frontend-backend communication
+│   │   └── whisper/          # Native Whisper.cpp wrapper logic
+│   ├── preload/              # Preload scripts (IPC bridge)
+│   └── types/                # TypeScript type definitions
 │
-├── src/                      # Renderer process (React)
-├── components/
-│   │   ├── ui/              # shadcn components
-│   │   ├── AudioRecorder/
-│   │   └── TranscriptDisplay/
-│   ├── hooks/
-│   │   ├── useWhisper.ts
-│   │   └── useAudioRecorder.ts
-│   └── lib/
-│       └── utils.ts
+├── src/                      # Renderer process (React Frontend)
+│   ├── components/           # UI Components (shadcn/ui, Panels, Widgets)
+│   ├── hooks/                # Custom React Hooks (useWhisper, useLLM, etc.)
+│   ├── lib/                  # Utilities
+│   └── index.css             # Tailwind CSS entry & Design System
 │
-├── e2e/                      # Playwright E2E tests
-│   ├── app.spec.ts
-│   ├── helpers.ts
-│   └── README.md
+├── e2e/                      # Playwright End-to-End tests
 │
-└── models/                   # Whisper model files (auto-downloaded)
+└── models/                   # Local Whisper models (auto-downloaded)
 ```
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ or Bun
-- Windows (for overlay features)
+- [Node.js](https://nodejs.org/) (v18+) or [Bun](https://bun.sh/)
+- Windows OS (Required for certain transparent overlay features and desktop audio capture)
+- [Ollama](https://ollama.com/) (For local LLM capabilities)
 
 ### Installation
 
-```bash
-# Install dependencies
-bun install
+Clone the repository and install dependencies:
 
-# Build Electron main process
+```bash
+# Clone the repository
+git clone https://github.com/your-username/synapse-ai.git
+cd synapse-ai
+
+# Install dependencies using bun (or npm/yarn)
+bun install
+```
+
+### Running Locally
+
+```bash
+# Build the Electron main process
 bun run build:electron
 
-# Run in development mode
+# Start the application in development mode
 bun run dev
 ```
 
-### Running Tests
+### 🧠 Setting up Local AI Models
+
+1. **Speech Recognition (Whisper):**
+   The required whisper models can be downloaded from the Settings Panel inside the app, or manually using the setup script:
+   ```bash
+   bun run setup:whisper
+   ```
+
+2. **LLM Answers (Ollama):**
+   Make sure you have Ollama installed and running. Pull your preferred model (e.g., `qwen3-vl:2b` or `llama3`):
+   ```bash
+   ollama run qwen3-vl:2b
+   ```
+   You can configure the model name inside the Synapse AI Settings panel.
+
+## 🧪 Testing
+
+Synapse AI uses [Playwright](https://playwright.dev/) for end-to-end testing.
 
 ```bash
-# Run E2E tests
+# Run all E2E tests
 bun run test:e2e
 
-# Run tests with UI visible
+# Run tests with the UI visible
 bun run test:e2e:headed
 
-# Debug mode
-bun run test:e2e:debug
-
-# Interactive UI mode
+# Run tests in interactive UI mode
 bun run test:e2e:ui
 ```
 
-## Architecture
+See the [E2E Testing Guide](./e2e/README.md) for more detailed information.
+
+## 🛠️ Architecture
 
 ### Main Process (Electron)
-- **Whisper.cpp Integration** - Native transcription in main process
-- **IPC Handlers** - Type-safe communication with renderer
-- **Window Management** - Overlay configuration
+- **Whisper Integration** - Native transcription executed securely in the main process.
+- **Window Management** - Advanced overlay configuration, transparent window management, and screen privacy features.
+- **IPC Handlers** - Type-safe, high-performance communication with the renderer process.
 
 ### Renderer Process (React)
-- **Component Architecture** - Modular, reusable components
-- **Custom Hooks** - useWhisper, useAudioRecorder
-- **Tailwind CSS** - Utility-first styling with shadcn/ui
+- **Component Architecture** - Modular, reusable UI using Tailwind CSS and shadcn/ui components.
+- **React Hooks** - Streamlined hooks like `useWhisper`, `useAudioRecorder`, and `useLLM` to manage core application state seamlessly.
 
-### IPC Communication
-```
-Renderer → IPC → Main Process
-    ↓                ↓
-Audio Capture → Whisper.cpp
-    ↓                ↓
-Display ← IPC ← Transcription
-```
+## 🤝 Contributing
 
-## Technologies
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-- **Electron** - Desktop app framework
-- **Vite** - Fast build tool
-- **React + TypeScript** - UI framework
-- **Tailwind CSS** - Styling
-- **shadcn/ui** - Component library
-- **whisper-node** - Native Whisper.cpp bindings
-- **Playwright** - E2E testing
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## Development
+## 📄 License
 
-```bash
-# Start dev server
-bun run dev
-
-# Build for production
-bun run build
-bun run build:electron
-
-# Start production build
-bun run start
-```
-
-## Testing
-
-See [E2E Testing Guide](./e2e/README.md) for detailed information.
-
-## License
-
-ISC
+This project is licensed under the ISC License.
