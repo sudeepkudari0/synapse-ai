@@ -14,6 +14,7 @@ export interface PromptContext {
     resume?: string;
     jobDescription?: string;
     company?: string;
+    useBulletPoints?: boolean;
 }
 
 export interface PromptTemplate {

@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Trash2, MessageSquare, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, MessageSquare, ChevronDown, ChevronRight as ChevronRightIcon, List, AlignLeft } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { IconButton } from '../shared/IconButton';
 import { CopyButton } from '../shared/CopyButton';
+import { useUIStore } from '../../state/ui-store';
 import type { Answer } from '../../state';
 
 interface AnswerPanelProps {
@@ -12,6 +14,7 @@ interface AnswerPanelProps {
 }
 
 export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: AnswerPanelProps) {
+    const { useBulletPoints, toggleBulletPoints } = useUIStore();
     const [showFollowUps, setShowFollowUps] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const current = answers[currentIndex];
@@ -113,8 +116,10 @@ export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: Answ
                 )}
 
                 {/* Answer text */}
-                <div className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap answer-content">
-                    {current.answer || (
+                <div className="text-sm leading-relaxed text-[var(--text-primary)] answer-content prose prose-invert prose-sm max-w-none">
+                    {current.answer ? (
+                        <ReactMarkdown>{current.answer}</ReactMarkdown>
+                    ) : (
                         <span className="text-[var(--text-muted)]">Generating...</span>
                     )}
 
@@ -155,7 +160,21 @@ export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: Answ
                     <span className="text-[10px] text-[var(--text-muted)]">
                         {current.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </span>
-                    <CopyButton text={current.answer} />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={toggleBulletPoints}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                useBulletPoints 
+                                    ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' 
+                                    : 'bg-zinc-800 text-zinc-400 hover:text-white border border-transparent'
+                            }`}
+                            title="Toggle Bullet Points for future answers"
+                        >
+                            {useBulletPoints ? <List className="w-3 h-3" /> : <AlignLeft className="w-3 h-3" />}
+                            Bullets
+                        </button>
+                        <CopyButton text={current.answer} />
+                    </div>
                 </div>
             )}
         </div>

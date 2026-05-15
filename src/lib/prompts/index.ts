@@ -9,20 +9,34 @@ import { getGeneralPrompt } from './templates/general';
 export * from './types';
 
 export const getPromptTemplate = (context: PromptContext): PromptTemplate => {
+    let template: PromptTemplate;
+    
     switch (context.interviewType) {
         case 'behavioral':
-            return getBehavioralPrompt(context);
+            template = getBehavioralPrompt(context);
+            break;
         case 'technical':
-            return getTechnicalPrompt(context);
+            template = getTechnicalPrompt(context);
+            break;
         case 'system-design':
-            return getSystemDesignPrompt(context);
+            template = getSystemDesignPrompt(context);
+            break;
         case 'coding':
-            return getCodingPrompt(context);
+            template = getCodingPrompt(context);
+            break;
         case 'hr-screening':
-            return getHRScreeningPrompt(context);
+            template = getHRScreeningPrompt(context);
+            break;
         case 'general':
         case 'case-study': // Fallback for case study until we implement a specific template
         default:
-            return getGeneralPrompt(context);
+            template = getGeneralPrompt(context);
+            break;
     }
+
+    if (context.useBulletPoints) {
+        template.system += '\n\nCRITICAL: The candidate needs concise speaking notes. Format the entire answer using short bullet points instead of paragraphs. Keep it highly scannable.';
+    }
+
+    return template;
 };

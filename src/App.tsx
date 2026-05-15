@@ -24,7 +24,7 @@ function App(): JSX.Element {
     } = useAnswerStore();
 
     const {
-        isExpanded, isSettingsOpen, isChatOpen, isHistoryOpen, isCapturing,
+        isExpanded, isSettingsOpen, isChatOpen, isHistoryOpen, isCapturing, useBulletPoints,
         toggleExpanded, setExpanded, toggleSettings, toggleChat, toggleHistory, setCapturing,
     } = useUIStore();
 
@@ -254,6 +254,7 @@ function App(): JSX.Element {
                     resume: profile.resume,
                     jobDescription: profile.jobDescription,
                     company: profile.targetCompany,
+                    useBulletPoints,
                 },
                 (chunk) => {
                     streamedAnswer += chunk;
@@ -316,6 +317,7 @@ function App(): JSX.Element {
                         resume: profile.resume,
                         jobDescription: profile.jobDescription,
                         company: profile.targetCompany,
+                        useBulletPoints,
                     },
                     (chunk) => {
                         streamedAnswer += chunk;

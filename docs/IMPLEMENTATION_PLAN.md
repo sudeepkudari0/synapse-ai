@@ -228,17 +228,17 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 3.1 STAR Framework & Structured Answers (Feature F5)
 > Answers formatted for real-time delivery, not reading.
 
-- [ ] **3.1.1** Update behavioral prompt template to enforce STAR with markdown headers
+- [x] **3.1.1** Update behavioral prompt template to enforce STAR with markdown headers
   - Output format: `**Situation:** ...\n**Task:** ...\n**Action:** ...\n**Result:** ...`
-- [ ] **3.1.2** Update system-design template to enforce phased structure with headers
-- [ ] **3.1.3** Update coding template to enforce Problem/Approach/Code/Complexity structure
-- [ ] **3.1.4** Modify `AnswerPanel.tsx` to render markdown properly
+- [x] **3.1.2** Update system-design template to enforce phased structure with headers
+- [x] **3.1.3** Update coding template to enforce Problem/Approach/Code/Complexity structure
+- [x] **3.1.4** Modify `AnswerPanel.tsx` to render markdown properly
   - Parse and render bold headers, bullet points, code blocks
   - Consider lightweight markdown renderer (or manual parsing for performance)
-- [ ] **3.1.5** Add "Bullet Points" toggle in AnswerPanel
+- [x] **3.1.5** Add "Bullet Points" toggle in AnswerPanel
   - When enabled: prompt appends "Use concise bullet points, not paragraphs"
   - When disabled: full structured answer
-- [ ] **3.1.6** Test: Behavioral question → verify STAR headers appear in answer
+- [x] **3.1.6** Test: Behavioral question → verify STAR headers appear in answer
 
 ### 3.2 Delivery Analytics (Feature F6)
 > Analyze user's speaking patterns and provide real-time feedback.

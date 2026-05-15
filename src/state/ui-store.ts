@@ -7,6 +7,7 @@ interface UIState {
     isChatOpen: boolean;
     isHistoryOpen: boolean;
     isCapturing: boolean;
+    useBulletPoints: boolean;
 
     // Actions
     toggleExpanded: () => void;
@@ -18,6 +19,7 @@ interface UIState {
     toggleHistory: () => void;
     setHistoryOpen: (open: boolean) => void;
     setCapturing: (capturing: boolean) => void;
+    toggleBulletPoints: () => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -27,6 +29,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     isChatOpen: false,
     isHistoryOpen: false,
     isCapturing: false,
+    useBulletPoints: false,
 
     // Actions
     toggleExpanded: () =>
@@ -84,4 +87,6 @@ export const useUIStore = create<UIState>((set, get) => ({
     setHistoryOpen: (open) => set({ isHistoryOpen: open }),
 
     setCapturing: (capturing) => set({ isCapturing: capturing }),
+
+    toggleBulletPoints: () => set((state) => ({ useBulletPoints: !state.useBulletPoints })),
 }));
