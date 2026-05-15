@@ -1,5 +1,6 @@
-import { X, Copy, ChevronLeft, Clock, FileText } from 'lucide-react';
+import { X, Copy, ChevronLeft, Clock, FileText, Download, FileJson } from 'lucide-react';
 import { ChatBlock, Answer } from '../../state';
+import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from '../../lib/session-export';
 
 interface SessionDetailProps {
     session: {
@@ -16,28 +17,34 @@ interface SessionDetailProps {
 }
 
 export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) {
-    const handleCopyMarkdown = () => {
-        let md = `# Interview Session: ${new Date(session.timestamp).toLocaleString()}\n`;
-        md += `- **Duration:** ${Math.floor(session.duration / 60)}m ${session.duration % 60}s\n`;
-        md += `- **Type:** ${session.type}\n\n`;
+    const buildExportSession = () => ({
+        id: session.id,
+        startTime: session.timestamp,
+        interviewType: session.type,
+        conversation: session.transcript.map(b => ({ speaker: b.speaker, text: b.text })),
+        answers: session.answers.map(a => ({ question: a.question, answer: a.answer, source: a.source })),
+        deliveryMetrics: session.metrics ? {
+            wordsPerMinute: session.metrics.wpm,
+            fillerWordCount: session.metrics.fillerWordCount,
+        } : undefined,
+    });
 
-        md += `## Transcript\n\n`;
-        session.transcript.forEach(block => {
-            const speaker = block.speaker === 'user' ? 'Candidate' : 'Interviewer';
-            md += `**${speaker}:** ${block.text}\n\n`;
-        });
+    const handleCopyMarkdown = async () => {
+        const md = exportAsMarkdown(buildExportSession());
+        const ok = await copyToClipboard(md);
+        if (ok) alert('Copied to clipboard as Markdown!');
+    };
 
-        md += `## Generated Answers\n\n`;
-        session.answers.forEach((answer, idx) => {
-            md += `### Q&A ${idx + 1} (${answer.detectedType || 'general'})\n`;
-            md += `**Context:**\n${answer.question}\n\n`;
-            md += `**AI Response:**\n${answer.answer}\n\n`;
-        });
+    const handleDownloadMarkdown = () => {
+        const md = exportAsMarkdown(buildExportSession());
+        const filename = `synapse-session-${new Date(session.timestamp).toISOString().split('T')[0]}.md`;
+        downloadFile(md, filename, 'text/markdown');
+    };
 
-        navigator.clipboard.writeText(md).then(() => {
-            // In a real app we might show a toast here
-            alert("Copied to clipboard as Markdown!");
-        });
+    const handleDownloadJSON = () => {
+        const json = exportAsJSON(buildExportSession());
+        const filename = `synapse-session-${new Date(session.timestamp).toISOString().split('T')[0]}.json`;
+        downloadFile(json, filename, 'application/json');
     };
 
     return (
@@ -70,9 +77,26 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
                     <button 
                         onClick={handleCopyMarkdown}
                         className="px-2 py-1 text-[10px] font-medium text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 rounded transition-colors flex items-center gap-1"
+                        title="Copy Markdown to clipboard"
                     >
                         <Copy className="w-3 h-3" />
-                        Export MD
+                        Copy MD
+                    </button>
+                    <button 
+                        onClick={handleDownloadMarkdown}
+                        className="px-2 py-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded transition-colors flex items-center gap-1"
+                        title="Download as Markdown file"
+                    >
+                        <Download className="w-3 h-3" />
+                        .md
+                    </button>
+                    <button 
+                        onClick={handleDownloadJSON}
+                        className="px-2 py-1 text-[10px] font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 rounded transition-colors flex items-center gap-1"
+                        title="Download as JSON file"
+                    >
+                        <FileJson className="w-3 h-3" />
+                        .json
                     </button>
                     <button 
                         onClick={onClose}

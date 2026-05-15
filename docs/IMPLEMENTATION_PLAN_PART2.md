@@ -126,71 +126,71 @@
 ### 6.1 Interview Simulation with Scoring (Feature F12)
 > Structured mock interviews with objective scoring.
 
-- [ ] **6.1.1** Extend practice mode with scoring calibration
+- [x] **6.1.1** Extend practice mode with scoring calibration
   - Score dimensions: completeness (1-10), structure (1-10), specificity (1-10), relevance (1-10), communication (1-10)
   - Overall score: weighted average
-- [ ] **6.1.2** Create `src/lib/scoring-engine.ts`
+- [x] **6.1.2** Create `src/lib/scoring-engine.ts`
   - `scoreAnswer(question, spokenAnswer, interviewType, profile): Promise<AnswerScore>`
   - Uses evaluator prompt template
   - Returns per-dimension scores + overall + specific feedback
-- [ ] **6.1.3** Create progress tracking across sessions
+- [x] **6.1.3** Create progress tracking across sessions
   - Store scores in `userData/synapse-data/progress/{interviewType}.json`
   - Track: average score over time, weakest dimensions, most improved areas
-- [ ] **6.1.4** Create `src/components/PracticeMode/ProgressDashboard.tsx`
+- [x] **6.1.4** Create `src/components/PracticeMode/ProgressDashboard.tsx`
   - Shows score trends over last 10 sessions per interview type
   - Highlights weakest areas with suggested focus drills
   - Simple text-based charts (no charting library)
-- [ ] **6.1.5** Test: Complete 3 practice sessions → verify progress tracking shows trends
+- [x] **6.1.5** Test: Complete 3 practice sessions → verify progress tracking shows trends
 
 ### 6.2 Multi-Language Support (Feature F11)
 > Support non-English interviews and ESL candidates.
 
-- [ ] **6.2.1** Add language preference to settings
+- [x] **6.2.1** Add language preference to settings
   - `interviewLanguage: string` (default: 'en')
   - `isESLMode: boolean` (default: false)
-- [ ] **6.2.2** Modify whisper model loading to support multilingual models
+- [x] **6.2.2** Modify whisper model loading to support multilingual models
   - When language is not 'en': use `ggml-base.bin` (multilingual) instead of `ggml-small.en.bin`
   - Add language parameter to whisper server transcription request
-- [ ] **6.2.3** Add ESL mode prompt modifier
+- [x] **6.2.3** Add ESL mode prompt modifier
   - When ESL: append to prompts "Use simple vocabulary. Avoid idioms. Suggest pronunciation-safe word alternatives for technical terms."
-- [ ] **6.2.4** Add grammar check mode
+- [x] **6.2.4** Add grammar check mode
   - Analyze user's transcript for common ESL grammar errors
   - Show gentle suggestions: "Consider: 'I managed' instead of 'I was managing'"
-- [ ] **6.2.5** Test: Enable ESL mode → verify simpler vocabulary in generated answers
+- [x] **6.2.5** Test: Enable ESL mode → verify simpler vocabulary in generated answers
 
 ### 6.3 Export & Sharing
 > Get data out of the app in useful formats.
 
-- [ ] **6.3.1** Session export to Markdown
+- [x] **6.3.1** Session export to Markdown
   - Full transcript with speaker labels
   - All Q&A pairs
   - Delivery metrics summary
   - One-click "Copy to Clipboard" or "Save as .md"
-- [ ] **6.3.2** Session export to PDF (optional, lower priority)
+- [x] **6.3.2** Session export to PDF (optional, lower priority)
   - Use simple HTML-to-PDF generation via Electron's `printToPDF`
-- [ ] **6.3.3** Practice progress export
+- [x] **6.3.3** Practice progress export
   - Export scoring history as CSV or markdown table
-- [ ] **6.3.4** Test: Export a session → verify markdown is clean and complete
+- [x] **6.3.4** Test: Export a session → verify markdown is clean and complete
 
 ### 6.4 UX Polish & Performance
 > Final polish pass before considering it "v2.0 complete."
 
-- [ ] **6.4.1** Keyboard shortcut for every major action
+- [x] **6.4.1** Keyboard shortcut for every major action
   - Document all shortcuts in a "Shortcuts" section in Settings
   - Make shortcuts customizable (store in settings)
-- [ ] **6.4.2** Answer generation latency optimization
+- [x] **6.4.2** Answer generation latency optimization
   - Profile time from question detection to first token
   - Target: under 3 seconds end-to-end
   - If slow: reduce context window, use smaller classification model
-- [ ] **6.4.3** Memory usage audit
+- [x] **6.4.3** Memory usage audit
   - Profile Electron app memory during 1-hour session
   - Fix any memory leaks (especially in audio buffers and transcript accumulation)
   - Target: under 300MB renderer process
-- [ ] **6.4.4** Error recovery
+- [x] **6.4.4** Error recovery
   - Whisper server crash → auto-restart with backoff
   - Ollama not running → clear error message with "Start Ollama" instructions
   - Session save failure → retry + user notification
-- [ ] **6.4.5** Onboarding flow for first-time users
+- [x] **6.4.5** Onboarding flow for first-time users
   - First launch: guided setup (paste resume, select model, test connection)
   - Skip option for experienced users
 

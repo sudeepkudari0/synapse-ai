@@ -14,9 +14,11 @@ export interface AppSettings {
     questionDetectionMode: 'regex' | 'llm' | 'hybrid';
     autoCaptureCodingMode: boolean;
     showDeliveryMetrics: boolean;
+    interviewLanguage: string;
+    isESLMode: boolean;
 }
 
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
@@ -30,6 +32,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     questionDetectionMode: 'hybrid',
     autoCaptureCodingMode: false,
     showDeliveryMetrics: true,
+    interviewLanguage: 'en',
+    isESLMode: false,
 };
 
 // Migration map: version number -> transform function
@@ -50,6 +54,15 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             autoCaptureCodingMode: false,
             showDeliveryMetrics: true,
             version: 3,
+        };
+    },
+    3: (settings: any) => {
+        // v3 -> v4: Add language and ESL mode
+        return {
+            ...settings,
+            interviewLanguage: 'en',
+            isESLMode: false,
+            version: 4,
         };
     },
 };

@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { usePracticeStore } from '../../state/practice-store';
 import { InterviewType } from '../../lib/prompts/types';
+import { BarChart3 } from 'lucide-react';
 
-export const PracticeSetup: React.FC = () => {
+interface PracticeSetupProps {
+    onShowProgress: () => void;
+}
+
+export const PracticeSetup: React.FC<PracticeSetupProps> = ({ onShowProgress }) => {
     const { startPractice } = usePracticeStore();
     const [interviewType, setInterviewType] = useState<InterviewType>('behavioral');
     const [role, setRole] = useState('Software Engineer');
@@ -81,6 +86,13 @@ export const PracticeSetup: React.FC = () => {
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors disabled:opacity-50"
                 >
                     Start Practice Session
+                </button>
+                <button
+                    onClick={onShowProgress}
+                    className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium py-2 px-4 rounded transition-colors flex items-center justify-center gap-2"
+                >
+                    <BarChart3 className="w-4 h-4" />
+                    View Progress
                 </button>
             </div>
         </div>
