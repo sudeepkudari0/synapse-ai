@@ -32,6 +32,7 @@ interface FloatingWidgetProps {
     onToggleExpanded: () => void;
     onToggleRecording: () => void;
     onCaptureScreen: () => void;
+    onRegionCapture: () => void;
     onGenerateAnswer: () => void;
     onClearTranscript: () => void;
     onClearAnswers: () => void;
@@ -62,6 +63,7 @@ export function FloatingWidget({
     onToggleExpanded,
     onToggleRecording,
     onCaptureScreen,
+    onRegionCapture,
     onGenerateAnswer,
     onClearTranscript,
     onClearAnswers,
@@ -147,6 +149,7 @@ export function FloatingWidget({
                     onToggleRecording={onToggleRecording}
                     onToggleExpanded={onToggleExpanded}
                     onCaptureScreen={onCaptureScreen}
+                    onRegionCapture={onRegionCapture}
                     onGenerateAnswer={onGenerateAnswer}
                     onOpenSettings={onToggleSettings}
                     onToggleChat={onToggleChat}

@@ -1,4 +1,4 @@
-import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle, History, GraduationCap, Code2 } from 'lucide-react';
+import { Mic, MicOff, Camera, Crop, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle, History, GraduationCap, Code2 } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { PulsingDot } from '../shared/PulsingDot';
 import { useDrag } from '../../hooks/useDrag';
@@ -14,6 +14,7 @@ interface WidgetHeaderProps {
     onToggleRecording: () => void;
     onToggleExpanded: () => void;
     onCaptureScreen: () => void;
+    onRegionCapture: () => void;
     onGenerateAnswer: () => void;
     onOpenSettings: () => void;
     onToggleChat: () => void;
@@ -32,6 +33,7 @@ export function WidgetHeader({
     onToggleRecording,
     onToggleExpanded,
     onCaptureScreen,
+    onRegionCapture,
     onGenerateAnswer,
     onOpenSettings,
     onToggleChat,
@@ -96,6 +98,16 @@ export function WidgetHeader({
                     ) : (
                         <Camera className="w-4 h-4" />
                     )}
+                </IconButton>
+
+                {/* Region Capture */}
+                <IconButton
+                    id="btn-region-capture"
+                    onClick={onRegionCapture}
+                    title="Region Capture (Ctrl+Shift+A)"
+                    disabled={isCapturing}
+                >
+                    <Crop className="w-4 h-4" />
                 </IconButton>
 
                 {/* Code Mode Toggle */}

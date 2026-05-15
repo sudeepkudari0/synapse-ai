@@ -529,4 +529,9 @@ export function registerGlobalShortcuts(mainWindow: BrowserWindow): void {
     globalShortcut.register('CommandOrControl+Shift+R', () => {
         mainWindow.webContents.send('shortcut:toggle-recording');
     });
+
+    // Ctrl+Shift+A → Region capture
+    globalShortcut.register('CommandOrControl+Shift+A', () => {
+        mainWindow.webContents.send('shortcut:region-capture');
+    });
 }

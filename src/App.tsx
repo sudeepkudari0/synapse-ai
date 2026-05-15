@@ -1,5 +1,6 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import { FloatingWidget } from './components/FloatingWidget/FloatingWidget';
+import { RegionSelector } from './components/RegionSelector/RegionSelector';
 import { useWhisper } from './hooks/useWhisper';
 import { useMixedAudioRecorder, SpeakerSource } from './hooks/useMixedAudioRecorder';
 import { useLLM } from './hooks/useLLM';
@@ -475,6 +476,12 @@ function App(): JSX.Element {
                     handleToggleRecording();
                 })
             );
+            // Region capture shortcut
+            unsubscribers.push(
+                window.electronAPI.onShortcut('shortcut:region-capture', () => {
+                    handleRegionCapture();
+                })
+            );
         }
 
         return () => {
@@ -490,37 +497,102 @@ function App(): JSX.Element {
         }
     };
 
+    // ─── Region Capture State ───
+    const [regionSelectState, setRegionSelectState] = useState<{ screenshotData: string } | null>(null);
+
+    const handleRegionCapture = async () => {
+        try {
+            const captureResult = await window.electronAPI.captureScreen();
+            if (captureResult.success && captureResult.imageData) {
+                setRegionSelectState({ screenshotData: captureResult.imageData });
+            }
+        } catch (error) {
+            console.error('Region capture failed:', error);
+        }
+    };
+
+    const handleRegionResult = async (croppedImageData: string) => {
+        setRegionSelectState(null);
+        setCapturing(true);
+        try {
+            const prompt = isCodeMode
+                ? getCodeAnalysisPrompt({ resume: profile.resume, jobDescription: profile.jobDescription })
+                : undefined;
+
+            const newAnswer: Answer = {
+                id: Date.now().toString(),
+                source: 'screen-capture',
+                question: isCodeMode ? '💻 Code Analysis (Region)' : '🔍 Region Analysis',
+                answer: '',
+                timestamp: new Date(),
+                isStreaming: true,
+                detectedType: isCodeMode ? 'coding' : undefined,
+            };
+            addAnswer(newAnswer);
+            setExpanded(true);
+
+            let streamedAnswer = '';
+            const systemPrompt = prompt?.system || 'You are an expert interview assistant. Analyze the selected region from a screenshot and provide clear, structured insight.';
+            const userPrompt = prompt?.user || 'Analyze this screenshot region. Extract questions, code, or information and provide a helpful response.';
+
+            await generateResponse(
+                userPrompt,
+                undefined,
+                (chunk) => {
+                    streamedAnswer += chunk;
+                    updateAnswer(newAnswer.id, { answer: streamedAnswer, isStreaming: true });
+                },
+                croppedImageData
+            );
+            updateAnswer(newAnswer.id, { isStreaming: false });
+        } catch (error) {
+            console.error('Region analysis failed:', error);
+        } finally {
+            setCapturing(false);
+        }
+    };
+
     // ─── Render ───
     return (
-        <FloatingWidget
-            isExpanded={isExpanded}
-            isSettingsOpen={isSettingsOpen}
-            isChatOpen={isChatOpen}
-            isHistoryOpen={isHistoryOpen}
-            isPracticeOpen={isPracticeOpen}
-            isRecording={isRecording}
-            isCapturing={isCapturing}
-            isGenerating={isGenerating}
-            sessionTime={sessionTime}
-            conversation={conversation}
-            answers={answers}
-            currentAnswerIndex={currentAnswerIndex}
-            isModelLoading={isModelLoading}
-            modelError={modelError}
-            onToggleExpanded={toggleExpanded}
-            onToggleRecording={handleToggleRecording}
-            onCaptureScreen={handleCaptureScreen}
-            onGenerateAnswer={handleGenerateAnswer}
-            onClearTranscript={handleClearTranscript}
-            onClearAnswers={clearAnswers}
-            onNavigateAnswer={navigateAnswer}
-            onToggleSettings={toggleSettings}
-            onToggleChat={toggleChat}
-            onToggleHistory={toggleHistory}
-            onTogglePractice={togglePractice}
-            onSettingsChanged={handleSettingsChanged}
-            onClose={handleClose}
-        />
+        <>
+            <FloatingWidget
+                isExpanded={isExpanded}
+                isSettingsOpen={isSettingsOpen}
+                isChatOpen={isChatOpen}
+                isHistoryOpen={isHistoryOpen}
+                isPracticeOpen={isPracticeOpen}
+                isRecording={isRecording}
+                isCapturing={isCapturing}
+                isGenerating={isGenerating}
+                sessionTime={sessionTime}
+                conversation={conversation}
+                answers={answers}
+                currentAnswerIndex={currentAnswerIndex}
+                isModelLoading={isModelLoading}
+                modelError={modelError}
+                onToggleExpanded={toggleExpanded}
+                onToggleRecording={handleToggleRecording}
+                onCaptureScreen={handleCaptureScreen}
+                onRegionCapture={handleRegionCapture}
+                onGenerateAnswer={handleGenerateAnswer}
+                onClearTranscript={handleClearTranscript}
+                onClearAnswers={clearAnswers}
+                onNavigateAnswer={navigateAnswer}
+                onToggleSettings={toggleSettings}
+                onToggleChat={toggleChat}
+                onToggleHistory={toggleHistory}
+                onTogglePractice={togglePractice}
+                onSettingsChanged={handleSettingsChanged}
+                onClose={handleClose}
+            />
+            {regionSelectState && (
+                <RegionSelector
+                    screenshotData={regionSelectState.screenshotData}
+                    onCapture={handleRegionResult}
+                    onCancel={() => setRegionSelectState(null)}
+                />
+            )}
+        </>
     );
 }
 

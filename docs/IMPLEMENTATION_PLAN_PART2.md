@@ -35,17 +35,17 @@
 ### 4.2 Enhanced Screen Capture
 > Region selection and prompted analysis.
 
-- [ ] **4.2.1** Create `src/components/RegionSelector/RegionSelector.tsx`
+- [x] **4.2.1** Create `src/components/RegionSelector/RegionSelector.tsx`
   - Transparent fullscreen overlay for drag-to-select region
   - Canvas-based crop tool
   - Returns cropped image as base64
-- [ ] **4.2.2** Add "Region Capture" option alongside full-screen capture
+- [x] **4.2.2** Add "Region Capture" option alongside full-screen capture
   - New hotkey: Ctrl+Shift+A for region capture
-- [ ] **4.2.3** Add optional text prompt input before capture analysis
+- [x] **4.2.3** Add optional text prompt input before capture analysis
   - Small input box: "What should I analyze?" (optional, default: auto-analyze)
   - Passes user's prompt to the vision LLM for targeted analysis
-- [ ] **4.2.4** Register new global shortcut in `ipc-handlers.ts`
-- [ ] **4.2.5** Test: Region capture → select area → add custom prompt → verify targeted analysis
+- [x] **4.2.4** Register new global shortcut in `ipc-handlers.ts`
+- [x] **4.2.5** Test: Region capture → select area → add custom prompt → verify targeted analysis
 
 ---
 

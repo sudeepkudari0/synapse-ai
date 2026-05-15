@@ -167,6 +167,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
             'shortcut:generate-answer',
             'shortcut:toggle-widget',
             'shortcut:toggle-recording',
+            'shortcut:region-capture',
         ];
         if (validChannels.includes(channel)) {
             ipcRenderer.on(channel, callback);
