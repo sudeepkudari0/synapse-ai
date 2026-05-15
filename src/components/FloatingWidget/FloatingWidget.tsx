@@ -1,10 +1,10 @@
 import { useRef, useEffect } from 'react';
 import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
-import { AnswerPanel, Answer } from './AnswerPanel';
+import { AnswerPanel } from './AnswerPanel';
 import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import { ChatPanel } from '../ChatPanel/ChatPanel';
-import { ChatBlock } from '../../App';
+import type { ChatBlock, Answer } from '../../state';
 import './FloatingWidget.css';
 
 interface FloatingWidgetProps {
@@ -176,5 +176,5 @@ export function FloatingWidget({
     );
 }
 
-// Re-export Answer type for use in App.tsx
-export type { Answer } from './AnswerPanel';
+// Re-export Answer type for convenience
+export type { Answer } from '../../state';

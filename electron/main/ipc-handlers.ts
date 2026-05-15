@@ -431,6 +431,65 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
         }
     });
 
+    // Session Storage
+    ipcMain.handle(IPC_CHANNELS.SESSION_SAVE, async (event, session: any) => {
+        try {
+            const { saveSession } = await import('./storage/session-store');
+            saveSession(session);
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.SESSION_LOAD, async (event, id: string) => {
+        try {
+            const { loadSession } = await import('./storage/session-store');
+            return { success: true, session: loadSession(id) };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.SESSION_LIST, async () => {
+        try {
+            const { listSessions } = await import('./storage/session-store');
+            return { success: true, sessions: listSessions() };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.SESSION_DELETE, async (event, id: string) => {
+        try {
+            const { deleteSession } = await import('./storage/session-store');
+            deleteSession(id);
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    // Profile Storage
+    ipcMain.handle(IPC_CHANNELS.PROFILE_SAVE, async (event, profile: any) => {
+        try {
+            const { saveProfile } = await import('./storage/profile-store');
+            saveProfile(profile);
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.PROFILE_LOAD, async () => {
+        try {
+            const { loadProfile } = await import('./storage/profile-store');
+            return { success: true, profile: loadProfile() };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
     // App: Quit application
     ipcMain.handle(IPC_CHANNELS.QUIT_APP, async () => {
         try {

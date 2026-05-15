@@ -7,7 +7,6 @@ import ortWasmThreadedWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?
 export type SpeakerSource = 'user' | 'interviewer';
 
 interface UseMixedAudioRecorderReturn {
-    isRecording: boolean;
     startRecording: () => Promise<void>;
     stopRecording: () => void;
     clearChunks: () => void;
@@ -23,9 +22,6 @@ export function useMixedAudioRecorder(
     // Overlap: prepend last 1s of previous chunk to avoid word loss at boundaries
     const OVERLAP_MS = 1000;
     const OVERLAP_SAMPLES = Math.floor((SAMPLE_RATE * OVERLAP_MS) / 1000);
-
-    const [isRecording, setIsRecording] = useState(false);
-    
     const micStreamRef = useRef<MediaStream | null>(null);
     const systemStreamRef = useRef<MediaStream | null>(null);
     
@@ -214,7 +210,6 @@ export function useMixedAudioRecorder(
                 systemVADRef.current.start();
             }
 
-            setIsRecording(true);
         } catch (error) {
             logger.error('Failed to start recording:', error);
             throw error;
@@ -253,13 +248,11 @@ export function useMixedAudioRecorder(
             systemStreamRef.current = null;
         }
 
-        setIsRecording(false);
     }, [emitMicChunk, emitSysChunk]);
 
     const clearChunks = useCallback(() => {}, []);
 
     return {
-        isRecording,
         startRecording,
         stopRecording,
         clearChunks,

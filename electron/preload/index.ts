@@ -17,6 +17,12 @@ const IPC_CHANNELS = {
     TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
     DOWNLOAD_WHISPER_MODEL: 'whisper:download-model',
+    SESSION_SAVE: 'session:save',
+    SESSION_LOAD: 'session:load',
+    SESSION_LIST: 'session:list',
+    SESSION_DELETE: 'session:delete',
+    PROFILE_SAVE: 'profile:save',
+    PROFILE_LOAD: 'profile:load',
 } as const;
 
 // Expose protected methods to renderer process
@@ -139,6 +145,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     testOllama: async () => {
         return await ipcRenderer.invoke(IPC_CHANNELS.TEST_OLLAMA);
+    },
+
+    // Storage API
+    session: {
+        save: async (session: any) => ipcRenderer.invoke(IPC_CHANNELS.SESSION_SAVE, session),
+        load: async (id: string) => ipcRenderer.invoke(IPC_CHANNELS.SESSION_LOAD, id),
+        list: async () => ipcRenderer.invoke(IPC_CHANNELS.SESSION_LIST),
+        delete: async (id: string) => ipcRenderer.invoke(IPC_CHANNELS.SESSION_DELETE, id),
+    },
+
+    profile: {
+        save: async (profile: any) => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_SAVE, profile),
+        load: async () => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_LOAD),
     },
 
     // Shortcut listeners — renderer subscribes to global shortcut events

@@ -63,6 +63,19 @@ interface ElectronAPI {
     getAvailableModels: () => Promise<{ success: boolean; models?: string[]; error?: string }>;
     testOllama: () => Promise<{ success: boolean; message?: string; error?: string }>;
     
+    // Storage API
+    session: {
+        save: (session: any) => Promise<{ success: boolean; error?: string }>;
+        load: (id: string) => Promise<{ success: boolean; session?: any; error?: string }>;
+        list: () => Promise<{ success: boolean; sessions?: any[]; error?: string }>;
+        delete: (id: string) => Promise<{ success: boolean; error?: string }>;
+    };
+    
+    profile: {
+        save: (profile: any) => Promise<{ success: boolean; error?: string }>;
+        load: () => Promise<{ success: boolean; profile?: any; error?: string }>;
+    };
+    
     onShortcut: (channel: string, callback: () => void) => () => void;
 }
 

@@ -48,80 +48,80 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 1.1 State Management — Zustand Migration
 > Extract all state from App.tsx (451 lines) into dedicated Zustand stores.
 
-- [ ] **1.1.1** Install Zustand: `bun add zustand`
-- [ ] **1.1.2** Create `src/state/session-store.ts`
+- [x] **1.1.1** Install Zustand: `bun add zustand`
+- [x] **1.1.2** Create `src/state/session-store.ts`
   - State: `conversation`, `isRecording`, `sessionTime`, transcription queue refs
   - Actions: `startSession`, `stopSession`, `addChatBlock`, `clearTranscript`
-- [ ] **1.1.3** Create `src/state/answer-store.ts`
+- [x] **1.1.3** Create `src/state/answer-store.ts`
   - State: `answers`, `currentAnswerIndex`, `isGenerating`
   - Actions: `addAnswer`, `updateAnswer`, `navigateAnswer`, `clearAnswers`
-- [ ] **1.1.4** Create `src/state/ui-store.ts`
+- [x] **1.1.4** Create `src/state/ui-store.ts`
   - State: `isExpanded`, `isSettingsOpen`, `isChatOpen`, `isCapturing`
   - Actions: `toggleExpanded`, `toggleSettings`, `toggleChat`
-- [ ] **1.1.5** Create `src/state/profile-store.ts`
+- [x] **1.1.5** Create `src/state/profile-store.ts`
   - State: `resume`, `jobDescription`, `targetCompany`, `targetRole`, `skills[]`
   - Actions: `updateProfile`, `loadProfile`, `clearProfile`
-- [ ] **1.1.6** Refactor `App.tsx` to consume Zustand stores instead of local useState/useRef
+- [x] **1.1.6** Refactor `App.tsx` to consume Zustand stores instead of local useState/useRef
   - Target: App.tsx should be under 100 lines after refactor
-- [ ] **1.1.7** Verify all existing functionality works identically after migration
+- [x] **1.1.7** Verify all existing functionality works identically after migration
 
 ### 1.2 Prompt Template Engine
 > Centralized prompt system that swaps templates based on interview type.
 
-- [ ] **1.2.1** Create `src/lib/prompts/types.ts`
+- [x] **1.2.1** Create `src/lib/prompts/types.ts`
   - Define `InterviewType` enum: `behavioral`, `technical`, `system-design`, `coding`, `hr-screening`, `case-study`, `general`
   - Define `PromptContext` interface: `{ interviewType, resume?, jobDescription?, company?, conversationHistory, currentQuestion }`
   - Define `PromptTemplate` interface: `{ system: string, user: string }`
-- [ ] **1.2.2** Create `src/lib/prompts/templates/behavioral.ts`
+- [x] **1.2.2** Create `src/lib/prompts/templates/behavioral.ts`
   - STAR-formatted system prompt
   - Insists on Situation/Task/Action/Result headers
   - Limits answer to ~300 words (2 min speaking time)
   - Injects resume context for story matching
-- [ ] **1.2.3** Create `src/lib/prompts/templates/technical.ts`
+- [x] **1.2.3** Create `src/lib/prompts/templates/technical.ts`
   - Problem → Approach → Key Points → Edge Cases format
   - Technically precise, uses candidate's skill set
-- [ ] **1.2.4** Create `src/lib/prompts/templates/system-design.ts`
+- [x] **1.2.4** Create `src/lib/prompts/templates/system-design.ts`
   - Requirements → Estimation → High-Level → Deep Dive → Trade-offs
   - Suggests specific technologies
   - Includes estimation helpers
-- [ ] **1.2.5** Create `src/lib/prompts/templates/coding.ts`
+- [x] **1.2.5** Create `src/lib/prompts/templates/coding.ts`
   - Algorithm classification + complexity analysis
   - Pseudocode + clean code output
   - Edge case enumeration
-- [ ] **1.2.6** Create `src/lib/prompts/templates/hr-screening.ts`
+- [x] **1.2.6** Create `src/lib/prompts/templates/hr-screening.ts`
   - Concise (under 150 words)
   - Professional, positive tone
   - Salary question deflection strategies
-- [ ] **1.2.7** Create `src/lib/prompts/templates/general.ts`
+- [x] **1.2.7** Create `src/lib/prompts/templates/general.ts`
   - Fallback template (improved version of current generic prompt)
-- [ ] **1.2.8** Create `src/lib/prompts/index.ts`
+- [x] **1.2.8** Create `src/lib/prompts/index.ts`
   - `getPromptTemplate(context: PromptContext): PromptTemplate` — selector function
   - Applies resume/JD/company modifiers on top of base template
-- [ ] **1.2.9** Modify `src/hooks/useLLM.ts` to use prompt template engine instead of hardcoded prompts
-- [ ] **1.2.10** Verify answer generation works with new prompt system
+- [x] **1.2.9** Modify `src/hooks/useLLM.ts` to use prompt template engine instead of hardcoded prompts
+- [x] **1.2.10** Verify answer generation works with new prompt system
 
 ### 1.3 Session Storage Layer
 > Filesystem-based JSON storage for sessions, profiles, analytics.
 
-- [ ] **1.3.1** Create `electron/main/storage/store.ts`
+- [x] **1.3.1** Create `electron/main/storage/store.ts`
   - Generic typed CRUD: `read<T>(path)`, `write<T>(path, data)`, `list(dir)`, `delete(path)`
   - All paths relative to `app.getPath('userData')/synapse-data/`
   - Auto-create directories on write
-- [ ] **1.3.2** Create `electron/main/storage/session-store.ts`
+- [x] **1.3.2** Create `electron/main/storage/session-store.ts`
   - `saveSession(session: SessionData): void`
   - `loadSession(id: string): SessionData`
   - `listSessions(): SessionSummary[]`
   - `deleteSession(id: string): void`
   - SessionData: `{ id, startTime, endTime, duration, interviewType, conversation[], answers[], deliveryMetrics?, tags[] }`
-- [ ] **1.3.3** Create `electron/main/storage/profile-store.ts`
+- [x] **1.3.3** Create `electron/main/storage/profile-store.ts`
   - `saveProfile(profile: UserProfile): void`
   - `loadProfile(): UserProfile`
   - UserProfile: `{ resume, jobDescription, targetCompany, targetRole, skills[], stories[] }`
-- [ ] **1.3.4** Register IPC handlers for storage operations in `ipc-handlers.ts`
+- [x] **1.3.4** Register IPC handlers for storage operations in `ipc-handlers.ts`
   - `session:save`, `session:load`, `session:list`, `session:delete`
   - `profile:save`, `profile:load`
-- [ ] **1.3.5** Update `electron/preload/` to expose new IPC channels
-- [ ] **1.3.6** Update `electron/types/ipc.ts` with new channel constants
+- [x] **1.3.5** Update `electron/preload/` to expose new IPC channels
+- [x] **1.3.6** Update `electron/types/ipc.ts` with new channel constants
 
 ### 1.4 Settings Schema Migration
 > Version settings.json so old installs auto-migrate.

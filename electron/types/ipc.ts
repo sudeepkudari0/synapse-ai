@@ -67,4 +67,11 @@ export const IPC_CHANNELS = {
     TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
     DOWNLOAD_WHISPER_MODEL: 'whisper:download-model',
+    // Session & Profile Storage
+    SESSION_SAVE: 'session:save',
+    SESSION_LOAD: 'session:load',
+    SESSION_LIST: 'session:list',
+    SESSION_DELETE: 'session:delete',
+    PROFILE_SAVE: 'profile:save',
+    PROFILE_LOAD: 'profile:load',
 } as const;

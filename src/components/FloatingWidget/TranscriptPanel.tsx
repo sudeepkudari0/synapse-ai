@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
-import { ChatBlock } from '../../App';
+import type { ChatBlock } from '../../state';
 
 interface TranscriptPanelProps {
     conversation: ChatBlock[];

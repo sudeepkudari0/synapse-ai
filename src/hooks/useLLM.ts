@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { getPromptTemplate, PromptContext } from '../lib/prompts';
 
 interface LLMOptions {
     systemPrompt?: string;
@@ -7,7 +8,7 @@ interface LLMOptions {
 }
 
 /**
- * Hook for interacting with cloud LLM services (OpenAI/Gemini)
+ * Hook for interacting with cloud LLM services (OpenAI/Gemini/Ollama)
  * Handles streaming responses and context management
  */
 export function useLLM(options: LLMOptions = {}) {
@@ -15,10 +16,7 @@ export function useLLM(options: LLMOptions = {}) {
     const [error, setError] = useState<string | null>(null);
 
     /**
-     * Generate AI response with streaming support
-     * @param prompt - User prompt or question
-     * @param context - Additional context (resume, job description, etc.)
-     * @param onChunk - Callback for each streamed chunk
+     * Generate AI response with raw prompt (legacy/custom flow)
      */
     const generateResponse = useCallback(
         async (
@@ -44,7 +42,6 @@ Provide structured, professional answers that:
                     ? `Context:\n${context}\n\nQuestion:\n${prompt}\n\nProvide a professional answer:`
                     : `Question:\n${prompt}\n\nProvide a professional answer:`;
 
-                // Call cloud LLM (OpenAI/Gemini)
                 const response = await window.electronAPI.llmGenerate({
                     systemPrompt,
                     prompt: fullPrompt,
@@ -72,7 +69,48 @@ Provide structured, professional answers that:
     );
 
     /**
-     * Generate interview answer based on question and resume
+     * Generate interview answer using the new Prompt Template Engine
+     */
+    const generateAnswerWithTemplate = useCallback(
+        async (
+            promptContext: PromptContext,
+            onChunk?: (chunk: string) => void,
+            imageData?: string
+        ): Promise<string> => {
+            setIsGenerating(true);
+            setError(null);
+
+            try {
+                const template = getPromptTemplate(promptContext);
+
+                const response = await window.electronAPI.llmGenerate({
+                    systemPrompt: template.system,
+                    prompt: template.user,
+                    temperature: options.temperature ?? 0.7,
+                    maxTokens: options.maxTokens ?? 512,
+                    stream: !!onChunk,
+                    imageData,
+                }, onChunk);
+
+                if (response.success) {
+                    return response.text || '';
+                } else {
+                    throw new Error(response.error || 'Failed to generate response');
+                }
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : 'Failed to generate response';
+                setError(errorMessage);
+                console.error('LLM generation error:', err);
+                throw err;
+            } finally {
+                setIsGenerating(false);
+            }
+        },
+        [options]
+    );
+
+    /**
+     * Legacy method for generating interview answers
      */
     const generateInterviewAnswer = useCallback(
         async (
@@ -80,13 +118,15 @@ Provide structured, professional answers that:
             resumeContext?: string,
             onChunk?: (chunk: string) => void
         ): Promise<string> => {
-            const contextPrompt = resumeContext
-                ? `Candidate Background:\n${resumeContext}\n\nInterview Question: ${question}`
-                : `Interview Question: ${question}`;
-
-            return generateResponse(contextPrompt, undefined, onChunk);
+            // Map legacy call to the new template engine
+            return generateAnswerWithTemplate({
+                interviewType: 'general',
+                currentQuestion: question,
+                conversationHistory: '', // We don't have this in the legacy signature
+                resume: resumeContext,
+            }, onChunk);
         },
-        [generateResponse]
+        [generateAnswerWithTemplate]
     );
 
     return {
@@ -94,5 +134,6 @@ Provide structured, professional answers that:
         error,
         generateResponse,
         generateInterviewAnswer,
+        generateAnswerWithTemplate,
     };
 }

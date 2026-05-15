@@ -2,15 +2,7 @@ import { useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { CopyButton } from '../shared/CopyButton';
-
-export interface Answer {
-    id: string;
-    source: 'transcript' | 'screen-capture';
-    question: string;
-    answer: string;
-    timestamp: Date;
-    isStreaming?: boolean;
-}
+import type { Answer } from '../../state';
 
 interface AnswerPanelProps {
     answers: Answer[];
