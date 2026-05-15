@@ -8,3 +8,6 @@ export { useUIStore } from './ui-store';
 
 export { useProfileStore } from './profile-store';
 export type { UserProfile } from './profile-store';
+
+export { usePracticeStore } from './practice-store';
+export type { PracticeConfig, PracticeQuestion, PracticeEvaluation } from './practice-store';

@@ -6,7 +6,9 @@ interface UIState {
     isSettingsOpen: boolean;
     isChatOpen: boolean;
     isHistoryOpen: boolean;
+    isPracticeOpen: boolean;
     isCapturing: boolean;
+    isCodeMode: boolean;
     useBulletPoints: boolean;
 
     // Actions
@@ -18,7 +20,10 @@ interface UIState {
     setChatOpen: (open: boolean) => void;
     toggleHistory: () => void;
     setHistoryOpen: (open: boolean) => void;
+    togglePractice: () => void;
+    setPracticeOpen: (open: boolean) => void;
     setCapturing: (capturing: boolean) => void;
+    toggleCodeMode: () => void;
     toggleBulletPoints: () => void;
 }
 
@@ -28,7 +33,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     isSettingsOpen: false,
     isChatOpen: false,
     isHistoryOpen: false,
+    isPracticeOpen: false,
     isCapturing: false,
+    isCodeMode: false,
     useBulletPoints: false,
 
     // Actions
@@ -37,8 +44,8 @@ export const useUIStore = create<UIState>((set, get) => ({
             const willCollapse = state.isExpanded;
             return {
                 isExpanded: !state.isExpanded,
-                // Close settings, chat and history when collapsing
-                ...(willCollapse ? { isSettingsOpen: false, isChatOpen: false, isHistoryOpen: false } : {}),
+                // Close settings, chat, history and practice when collapsing
+                ...(willCollapse ? { isSettingsOpen: false, isChatOpen: false, isHistoryOpen: false, isPracticeOpen: false } : {}),
             };
         }),
 
@@ -49,9 +56,9 @@ export const useUIStore = create<UIState>((set, get) => ({
             const willBeOpen = !state.isSettingsOpen;
             return {
                 isSettingsOpen: willBeOpen,
-                // Close chat and history when opening settings, expand widget if needed
+                // Close others when opening settings, expand widget if needed
                 ...(willBeOpen
-                    ? { isChatOpen: false, isHistoryOpen: false, isExpanded: true }
+                    ? { isChatOpen: false, isHistoryOpen: false, isPracticeOpen: false, isExpanded: true }
                     : {}),
             };
         }),
@@ -63,9 +70,9 @@ export const useUIStore = create<UIState>((set, get) => ({
             const willBeOpen = !state.isChatOpen;
             return {
                 isChatOpen: willBeOpen,
-                // Close settings and history when opening chat, expand widget if needed
+                // Close others when opening chat, expand widget if needed
                 ...(willBeOpen
-                    ? { isSettingsOpen: false, isHistoryOpen: false, isExpanded: true }
+                    ? { isSettingsOpen: false, isHistoryOpen: false, isPracticeOpen: false, isExpanded: true }
                     : {}),
             };
         }),
@@ -77,16 +84,32 @@ export const useUIStore = create<UIState>((set, get) => ({
             const willBeOpen = !state.isHistoryOpen;
             return {
                 isHistoryOpen: willBeOpen,
-                // Close settings and chat when opening history, expand widget if needed
+                // Close others when opening history, expand widget if needed
                 ...(willBeOpen
-                    ? { isSettingsOpen: false, isChatOpen: false, isExpanded: true }
+                    ? { isSettingsOpen: false, isChatOpen: false, isPracticeOpen: false, isExpanded: true }
                     : {}),
             };
         }),
 
     setHistoryOpen: (open) => set({ isHistoryOpen: open }),
 
+    togglePractice: () =>
+        set((state) => {
+            const willBeOpen = !state.isPracticeOpen;
+            return {
+                isPracticeOpen: willBeOpen,
+                // Close others when opening practice, expand widget if needed
+                ...(willBeOpen
+                    ? { isSettingsOpen: false, isChatOpen: false, isHistoryOpen: false, isExpanded: true }
+                    : {}),
+            };
+        }),
+
+    setPracticeOpen: (open) => set({ isPracticeOpen: open }),
+
     setCapturing: (capturing) => set({ isCapturing: capturing }),
 
     toggleBulletPoints: () => set((state) => ({ useBulletPoints: !state.useBulletPoints })),
+
+    toggleCodeMode: () => set((state) => ({ isCodeMode: !state.isCodeMode })),
 }));

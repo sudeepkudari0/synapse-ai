@@ -12,25 +12,25 @@
 ### 4.1 Code Interview Assistant (Feature F8)
 > Real-time algorithm detection and coding help from screen captures.
 
-- [ ] **4.1.1** Create `src/lib/prompts/templates/code-analysis.ts`
+- [x] **4.1.1** Create `src/lib/prompts/templates/code-analysis.ts`
   - Vision-specific prompt for coding interviews
   - Extract: problem statement, constraints, examples
   - Classify: problem type (DP, graphs, trees, arrays, strings, etc.)
   - Output: optimal algorithm, time/space complexity, pseudocode, edge cases
-- [ ] **4.1.2** Add "Code Mode" toggle in widget header
+- [x] **4.1.2** Add "Code Mode" toggle in widget header
   - When active: screen capture uses coding-specific prompts
   - Changes capture shortcut behavior to use code analysis pipeline
-- [ ] **4.1.3** Modify `handleCaptureScreen` in App.tsx to branch on Code Mode
+- [x] **4.1.3** Modify `handleCaptureScreen` in App.tsx to branch on Code Mode
   - Code Mode ON → use code-analysis prompt template
   - Code Mode OFF → use existing general analysis prompt
-- [ ] **4.1.4** Modify `AnswerPanel.tsx` to render code blocks with syntax highlighting
+- [x] **4.1.4** Modify `AnswerPanel.tsx` to render code blocks with syntax highlighting
   - Use `<pre><code>` with CSS-based highlighting (no external library)
   - Or lightweight lib if needed: Prism.js (~6KB)
-- [ ] **4.1.5** Add "Auto-Capture" option in Code Mode
+- [x] **4.1.5** Add "Auto-Capture" option in Code Mode
   - Captures screen every 30 seconds automatically
   - Detects if content changed before re-analyzing (basic image diff)
   - Toggle in settings: "Auto-capture in Code Mode" (default: off)
-- [ ] **4.1.6** Test: Open a LeetCode problem → enable Code Mode → capture → verify algorithm suggestion
+- [x] **4.1.6** Test: Open a LeetCode problem → enable Code Mode → capture → verify algorithm suggestion
 
 ### 4.2 Enhanced Screen Capture
 > Region selection and prompted analysis.

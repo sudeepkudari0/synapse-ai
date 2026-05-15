@@ -8,6 +8,7 @@ import { classifyQuestion } from './lib/interview-classifier';
 import { isQuestion } from './lib/question-detector';
 import { predictFollowUps } from './lib/follow-up-predictor';
 import { analyzeDelivery } from './lib/delivery-analyzer';
+import { getCodeAnalysisPrompt } from './lib/prompts/templates/code-analysis';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
@@ -25,8 +26,8 @@ function App(): JSX.Element {
     } = useAnswerStore();
 
     const {
-        isExpanded, isSettingsOpen, isChatOpen, isHistoryOpen, isCapturing, useBulletPoints,
-        toggleExpanded, setExpanded, toggleSettings, toggleChat, toggleHistory, setCapturing,
+        isExpanded, isSettingsOpen, isChatOpen, isHistoryOpen, isPracticeOpen, isCapturing, isCodeMode, useBulletPoints,
+        toggleExpanded, setExpanded, toggleSettings, toggleChat, toggleHistory, togglePractice, setCapturing,
     } = useUIStore();
 
     // ─── Refs (not state — no re-render needed) ───
@@ -37,6 +38,7 @@ function App(): JSX.Element {
     const conversationRef = useRef<ChatBlock[]>([]);
     const autoGenerateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const autoCaptureTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const lastAnswerTimeRef = useRef<number>(0);
 
     // Sync conversationRef with store
@@ -46,7 +48,7 @@ function App(): JSX.Element {
 
     // ─── Hooks ───
     const { isModelLoading, isModelLoaded, modelError, loadModel, transcribe } = useWhisper();
-    const { generateAnswerWithTemplate } = useLLM();
+    const { generateAnswerWithTemplate, generateResponse } = useLLM();
     const { profile } = useProfile();
 
     // ─── Pre-load Whisper model on startup ───
@@ -70,6 +72,31 @@ function App(): JSX.Element {
             if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
         };
     }, [isRecording, setSessionTime]);
+
+    // ─── Auto-capture in Code Mode ───
+    useEffect(() => {
+        if (isRecording && isCodeMode) {
+            // Check settings for auto-capture preference
+            window.electronAPI.getSettings().then((res: any) => {
+                if (res.success && res.settings?.autoCaptureCodingMode) {
+                    autoCaptureTimerRef.current = setInterval(() => {
+                        handleCaptureScreen();
+                    }, 30000); // Every 30 seconds
+                }
+            });
+        } else {
+            if (autoCaptureTimerRef.current) {
+                clearInterval(autoCaptureTimerRef.current);
+                autoCaptureTimerRef.current = null;
+            }
+        }
+        return () => {
+            if (autoCaptureTimerRef.current) {
+                clearInterval(autoCaptureTimerRef.current);
+                autoCaptureTimerRef.current = null;
+            }
+        };
+    }, [isRecording, isCodeMode]);
 
     // ─── Transcription queue processing ───
     const processTranscriptionQueue = useCallback(async () => {
@@ -346,19 +373,60 @@ function App(): JSX.Element {
     const handleCaptureScreen = async () => {
         setCapturing(true);
         try {
-            const result = await window.electronAPI.captureAndAnalyze();
-            if (result.success && result.answer) {
-                addAnswer({
+            if (isCodeMode) {
+                // Code Mode: capture screen then stream analysis with code-specific prompt
+                const captureResult = await window.electronAPI.captureScreen();
+                if (!captureResult.success || !captureResult.imageData) {
+                    console.error('Screen capture failed:', captureResult.error);
+                    return;
+                }
+
+                const codePrompt = getCodeAnalysisPrompt({
+                    resume: profile.resume,
+                    jobDescription: profile.jobDescription,
+                });
+
+                const newAnswer: Answer = {
                     id: Date.now().toString(),
                     source: 'screen-capture',
-                    question: 'Screen Analysis',
-                    answer: result.answer,
+                    question: '💻 Code Analysis',
+                    answer: '',
                     timestamp: new Date(),
-                    isStreaming: false,
-                });
+                    isStreaming: true,
+                    detectedType: 'coding',
+                };
+
+                addAnswer(newAnswer);
                 setExpanded(true);
+
+                let streamedAnswer = '';
+                await generateResponse(
+                    codePrompt.user,
+                    undefined,
+                    (chunk) => {
+                        streamedAnswer += chunk;
+                        updateAnswer(newAnswer.id, { answer: streamedAnswer, isStreaming: true });
+                    },
+                    captureResult.imageData
+                );
+                updateAnswer(newAnswer.id, { isStreaming: false });
+
             } else {
-                console.error('Screen capture failed:', result.error);
+                // Standard mode: one-shot capture + analyze
+                const result = await window.electronAPI.captureAndAnalyze();
+                if (result.success && result.answer) {
+                    addAnswer({
+                        id: Date.now().toString(),
+                        source: 'screen-capture',
+                        question: 'Screen Analysis',
+                        answer: result.answer,
+                        timestamp: new Date(),
+                        isStreaming: false,
+                    });
+                    setExpanded(true);
+                } else {
+                    console.error('Screen capture failed:', result.error);
+                }
             }
         } catch (error) {
             console.error('Failed to capture screen:', error);
@@ -429,6 +497,7 @@ function App(): JSX.Element {
             isSettingsOpen={isSettingsOpen}
             isChatOpen={isChatOpen}
             isHistoryOpen={isHistoryOpen}
+            isPracticeOpen={isPracticeOpen}
             isRecording={isRecording}
             isCapturing={isCapturing}
             isGenerating={isGenerating}
@@ -448,6 +517,7 @@ function App(): JSX.Element {
             onToggleSettings={toggleSettings}
             onToggleChat={toggleChat}
             onToggleHistory={toggleHistory}
+            onTogglePractice={togglePractice}
             onSettingsChanged={handleSettingsChanged}
             onClose={handleClose}
         />

@@ -264,31 +264,31 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 3.3 Practice Mode — Mock Interviews (Feature F7)
 > AI-driven mock interviews for daily practice.
 
-- [ ] **3.3.1** Create `src/state/practice-store.ts`
+- [x] **3.3.1** Create `src/state/practice-store.ts`
   - State: `isPracticeMode`, `practiceConfig`, `currentQuestionIndex`, `practiceQuestions[]`, `evaluations[]`
   - PracticeConfig: `{ interviewType, role, company?, questionCount: 5-10 }`
-- [ ] **3.3.2** Create `src/lib/prompts/templates/interviewer.ts`
+- [x] **3.3.2** Create `src/lib/prompts/templates/interviewer.ts`
   - System prompt for AI playing interviewer role
   - Generates contextual questions based on resume + interview type + role
   - Adjusts difficulty progressively
-- [ ] **3.3.3** Create `src/lib/prompts/templates/evaluator.ts`
+- [x] **3.3.3** Create `src/lib/prompts/templates/evaluator.ts`
   - System prompt for evaluating user's spoken answer
   - Scoring criteria: completeness, structure, specificity, relevance, conciseness
   - Output: score (1-10), strengths, improvements, model answer
-- [ ] **3.3.4** Create `src/components/PracticeMode/PracticeSetup.tsx`
+- [x] **3.3.4** Create `src/components/PracticeMode/PracticeSetup.tsx`
   - Select interview type, role, company (optional), question count
   - "Start Practice" button
-- [ ] **3.3.5** Create `src/components/PracticeMode/PracticeSession.tsx`
+- [x] **3.3.5** Create `src/components/PracticeMode/PracticeSession.tsx`
   - Shows current AI question (displayed as text, not spoken)
   - User speaks their answer (uses existing whisper transcription)
   - "Next Question" button or auto-advance after silence
   - Shows AI evaluation after each answer
-- [ ] **3.3.6** Create `src/components/PracticeMode/PracticeResults.tsx`
+- [x] **3.3.6** Create `src/components/PracticeMode/PracticeResults.tsx`
   - Summary: overall score, per-question scores, strengths, areas to improve
   - Comparison to previous practice sessions (if any)
-- [ ] **3.3.7** Add "Practice" toggle/mode switch in widget header
-- [ ] **3.3.8** Save practice sessions with tag `type: 'practice'` to session store
-- [ ] **3.3.9** Test: Start practice → behavioral → 3 questions → speak answers → verify scoring works
+- [x] **3.3.7** Add "Practice" toggle/mode switch in widget header
+- [x] **3.3.8** Save practice sessions with tag `type: 'practice'` to session store
+- [x] **3.3.9** Test: Start practice → behavioral → 3 questions → speak answers → verify scoring works
 
 ---
 

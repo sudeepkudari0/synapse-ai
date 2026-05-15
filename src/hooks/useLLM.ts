@@ -110,6 +110,45 @@ Provide structured, professional answers that:
     );
 
     /**
+     * Generate AI response from a raw PromptTemplate (useful for custom templates like interviewer/evaluator)
+     */
+    const generateFromPromptTemplate = useCallback(
+        async (
+            template: { system: string; user: string },
+            onChunk?: (chunk: string) => void,
+            format?: 'json'
+        ): Promise<string> => {
+            setIsGenerating(true);
+            setError(null);
+
+            try {
+                const response = await window.electronAPI.llmGenerate({
+                    systemPrompt: template.system,
+                    prompt: template.user,
+                    temperature: options.temperature ?? 0.7,
+                    maxTokens: options.maxTokens ?? 1024,
+                    stream: !!onChunk,
+                    format: format, // Pass format if supported by IPC
+                }, onChunk);
+
+                if (response.success) {
+                    return response.text || '';
+                } else {
+                    throw new Error(response.error || 'Failed to generate response');
+                }
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : 'Failed to generate response';
+                setError(errorMessage);
+                console.error('LLM generation error:', err);
+                throw err;
+            } finally {
+                setIsGenerating(false);
+            }
+        },
+        [options]
+    );
+
+    /**
      * Legacy method for generating interview answers
      */
     const generateInterviewAnswer = useCallback(
@@ -135,5 +174,6 @@ Provide structured, professional answers that:
         generateResponse,
         generateInterviewAnswer,
         generateAnswerWithTemplate,
+        generateFromPromptTemplate,
     };
 }

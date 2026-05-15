@@ -118,7 +118,48 @@ export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: Answ
                 {/* Answer text */}
                 <div className="text-sm leading-relaxed text-[var(--text-primary)] answer-content prose prose-invert prose-sm max-w-none">
                     {current.answer ? (
-                        <ReactMarkdown>{current.answer}</ReactMarkdown>
+                        <ReactMarkdown
+                            components={{
+                                code({ node, className, children, ...props }) {
+                                    const match = /language-(\w+)/.exec(className || '');
+                                    const isInline = !match;
+                                    if (isInline) {
+                                        return (
+                                            <code
+                                                className="bg-zinc-800 text-emerald-400 px-1.5 py-0.5 rounded text-xs font-mono"
+                                                {...props}
+                                            >
+                                                {children}
+                                            </code>
+                                        );
+                                    }
+                                    const lang = match ? match[1] : '';
+                                    const codeString = String(children).replace(/\n$/, '');
+                                    return (
+                                        <div className="relative group my-3 rounded-lg overflow-hidden border border-zinc-700/50">
+                                            <div className="flex items-center justify-between bg-zinc-800/80 px-3 py-1.5 border-b border-zinc-700/50">
+                                                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                                                    {lang || 'code'}
+                                                </span>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(codeString)}
+                                                    className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <pre className="!bg-zinc-900 !m-0 p-3 overflow-x-auto">
+                                                <code className={`${className || ''} text-xs font-mono leading-relaxed`} {...props}>
+                                                    {children}
+                                                </code>
+                                            </pre>
+                                        </div>
+                                    );
+                                },
+                            }}
+                        >
+                            {current.answer}
+                        </ReactMarkdown>
                     ) : (
                         <span className="text-[var(--text-muted)]">Generating...</span>
                     )}

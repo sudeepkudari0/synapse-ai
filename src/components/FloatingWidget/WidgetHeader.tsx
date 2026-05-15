@@ -1,7 +1,8 @@
-import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle, History } from 'lucide-react';
+import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle, History, GraduationCap, Code2 } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { PulsingDot } from '../shared/PulsingDot';
 import { useDrag } from '../../hooks/useDrag';
+import { useUIStore } from '../../state/ui-store';
 
 interface WidgetHeaderProps {
     isRecording: boolean;
@@ -17,6 +18,7 @@ interface WidgetHeaderProps {
     onOpenSettings: () => void;
     onToggleChat: () => void;
     onToggleHistory: () => void;
+    onTogglePractice: () => void;
     onClose: () => void;
 }
 
@@ -34,9 +36,11 @@ export function WidgetHeader({
     onOpenSettings,
     onToggleChat,
     onToggleHistory,
+    onTogglePractice,
     onClose,
 }: WidgetHeaderProps) {
     const { onMouseDown } = useDrag();
+    const { isCodeMode, toggleCodeMode } = useUIStore();
 
     const formatTime = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
@@ -94,6 +98,16 @@ export function WidgetHeader({
                     )}
                 </IconButton>
 
+                {/* Code Mode Toggle */}
+                <IconButton
+                    id="btn-toggle-code-mode"
+                    onClick={toggleCodeMode}
+                    title={isCodeMode ? 'Code Mode ON (captures use coding prompts)' : 'Code Mode OFF'}
+                    className={isCodeMode ? '!text-emerald-400 !bg-emerald-500/15 ring-1 ring-emerald-500/30' : ''}
+                >
+                    <Code2 className="w-4 h-4" />
+                </IconButton>
+
                 {/* Generate Answer */}
                 <IconButton
                     id="btn-generate-answer"
@@ -106,6 +120,15 @@ export function WidgetHeader({
                     ) : (
                         <Sparkles className="w-4 h-4" />
                     )}
+                </IconButton>
+
+                {/* Practice Mode */}
+                <IconButton
+                    id="btn-toggle-practice"
+                    onClick={onTogglePractice}
+                    title="Practice Mode"
+                >
+                    <GraduationCap className="w-4 h-4" />
                 </IconButton>
 
                 {/* Settings */}

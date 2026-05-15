@@ -12,9 +12,11 @@ export interface AppSettings {
     ollamaBaseUrl: string;
     interviewType: string;
     questionDetectionMode: 'regex' | 'llm' | 'hybrid';
+    autoCaptureCodingMode: boolean;
+    showDeliveryMetrics: boolean;
 }
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
@@ -26,6 +28,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     ollamaBaseUrl: 'http://localhost:11434/v1',
     interviewType: 'general',
     questionDetectionMode: 'hybrid',
+    autoCaptureCodingMode: false,
+    showDeliveryMetrics: true,
 };
 
 // Migration map: version number -> transform function
@@ -37,6 +41,15 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             interviewType: 'general',
             questionDetectionMode: 'hybrid',
             version: 2,
+        };
+    },
+    2: (settings: any) => {
+        // v2 -> v3: Add coding mode and delivery metrics settings
+        return {
+            ...settings,
+            autoCaptureCodingMode: false,
+            showDeliveryMetrics: true,
+            version: 3,
         };
     },
 };

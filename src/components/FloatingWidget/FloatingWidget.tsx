@@ -6,6 +6,7 @@ import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import { ChatPanel } from '../ChatPanel/ChatPanel';
 import { SessionHistory } from '../SessionHistory/SessionHistory';
 import { SessionDetail } from '../SessionHistory/SessionDetail';
+import { PracticeMode } from '../PracticeMode/PracticeMode';
 import { MetricsBar } from '../DeliveryMetrics/MetricsBar';
 import type { ChatBlock, Answer } from '../../state';
 import './FloatingWidget.css';
@@ -16,6 +17,7 @@ interface FloatingWidgetProps {
     isSettingsOpen: boolean;
     isChatOpen: boolean;
     isHistoryOpen: boolean;
+    isPracticeOpen: boolean;
     isRecording: boolean;
     isCapturing: boolean;
     isGenerating: boolean;
@@ -37,6 +39,7 @@ interface FloatingWidgetProps {
     onToggleSettings: () => void;
     onToggleChat: () => void;
     onToggleHistory: () => void;
+    onTogglePractice: () => void;
     onSettingsChanged: () => void;
     onClose: () => void;
 }
@@ -45,6 +48,8 @@ export function FloatingWidget({
     isExpanded,
     isSettingsOpen,
     isChatOpen,
+    isHistoryOpen,
+    isPracticeOpen,
     isRecording,
     isCapturing,
     isGenerating,
@@ -64,6 +69,7 @@ export function FloatingWidget({
     onToggleSettings,
     onToggleChat,
     onToggleHistory,
+    onTogglePractice,
     onSettingsChanged,
     onClose,
 }: FloatingWidgetProps) {
@@ -145,12 +151,13 @@ export function FloatingWidget({
                     onOpenSettings={onToggleSettings}
                     onToggleChat={onToggleChat}
                     onToggleHistory={onToggleHistory}
+                    onTogglePractice={onTogglePractice}
                     onClose={onClose}
                 />
 
                 {/* Expandable content */}
                 <div className="widget-body">
-                    {/* Settings/Chat/History Panels override other content when open */}
+                    {/* Settings/Chat/History/Practice Panels override other content when open */}
                     {isSettingsOpen ? (
                         <SettingsPanel 
                             onClose={onToggleSettings} 
@@ -171,6 +178,8 @@ export function FloatingWidget({
                                 onLoadSession={handleLoadSession} 
                             />
                         )
+                    ) : isPracticeOpen ? (
+                        <PracticeMode />
                     ) : (
                         <>
                             {/* Loading indicator */}
