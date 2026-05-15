@@ -3,6 +3,7 @@ import { FloatingWidget } from './components/FloatingWidget/FloatingWidget';
 import { useWhisper } from './hooks/useWhisper';
 import { useMixedAudioRecorder, SpeakerSource } from './hooks/useMixedAudioRecorder';
 import { useLLM } from './hooks/useLLM';
+import { useProfile } from './hooks/useProfile';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
@@ -40,7 +41,8 @@ function App(): JSX.Element {
 
     // ─── Hooks ───
     const { isModelLoading, isModelLoaded, modelError, loadModel, transcribe } = useWhisper();
-    const { generateInterviewAnswer } = useLLM();
+    const { generateAnswerWithTemplate } = useLLM();
+    const { profile } = useProfile();
 
     // ─── Pre-load Whisper model on startup ───
     useEffect(() => {
@@ -192,9 +194,20 @@ function App(): JSX.Element {
 
         try {
             let streamedAnswer = '';
-            await generateInterviewAnswer(
-                fullTranscript,
-                undefined,
+            
+            // Fetch current settings to get interviewType
+            const settingsRes = await window.electronAPI.getSettings();
+            const interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
+
+            await generateAnswerWithTemplate(
+                {
+                    interviewType: interviewType as any,
+                    currentQuestion: fullTranscript,
+                    conversationHistory: '', // Only fullTranscript needed for now since it contains the whole history
+                    resume: profile.resume,
+                    jobDescription: profile.jobDescription,
+                    company: profile.targetCompany,
+                },
                 (chunk) => {
                     streamedAnswer += chunk;
                     updateAnswer(newAnswer.id, { answer: streamedAnswer, isStreaming: true });
@@ -227,9 +240,19 @@ function App(): JSX.Element {
         (async () => {
             try {
                 let streamedAnswer = '';
-                await generateInterviewAnswer(
-                    autoTranscript,
-                    undefined,
+                
+                const settingsRes = await window.electronAPI.getSettings();
+                const interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
+
+                await generateAnswerWithTemplate(
+                    {
+                        interviewType: interviewType as any,
+                        currentQuestion: autoTranscript,
+                        conversationHistory: '', // Included in autoTranscript
+                        resume: profile.resume,
+                        jobDescription: profile.jobDescription,
+                        company: profile.targetCompany,
+                    },
                     (chunk) => {
                         streamedAnswer += chunk;
                         updateAnswer(newAnswer.id, { answer: streamedAnswer, isStreaming: true });

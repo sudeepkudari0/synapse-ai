@@ -126,12 +126,12 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 1.4 Settings Schema Migration
 > Version settings.json so old installs auto-migrate.
 
-- [ ] **1.4.1** Add `version: number` field to `AppSettings` interface (default: 1)
-- [ ] **1.4.2** Create migration runner in `electron/main/settings.ts`
+- [x] **1.4.1** Add `version: number` field to `AppSettings` interface (default: 1)
+- [x] **1.4.2** Create migration runner in `electron/main/settings.ts`
   - `MIGRATIONS` map: version number → transform function
   - On load: run all migrations from current version to latest
-- [ ] **1.4.3** Create migration v1→v2: add `profile` fields, `interviewType` preference
-- [ ] **1.4.4** Test: delete settings.json, verify fresh install creates v2 settings
+- [x] **1.4.3** Create migration v1→v2: add `profile` fields, `interviewType` preference
+- [x] **1.4.4** Test: delete settings.json, verify fresh install creates v2 settings
 
 ---
 
@@ -142,21 +142,21 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 2.1 Resume & Job Description Context Engine (Feature F1)
 > Every AI answer grounded in user's actual experience.
 
-- [ ] **2.1.1** Create `src/components/SettingsPanel/ProfileSection.tsx`
+- [x] **2.1.1** Create `src/components/SettingsPanel/ProfileSection.tsx`
   - Textarea for resume paste (plaintext/markdown)
   - Textarea for job description paste
   - Input fields: target company, target role
   - "Save Profile" button
   - Visual indicator: "Profile loaded ✓" or "No profile set"
-- [ ] **2.1.2** Create `src/hooks/useProfile.ts`
+- [x] **2.1.2** Create `src/hooks/useProfile.ts`
   - Loads profile from IPC on mount
   - Provides `profile`, `saveProfile`, `isProfileLoaded`
-- [ ] **2.1.3** Integrate profile into `SettingsPanel` component (add ProfileSection as a tab/section)
-- [ ] **2.1.4** Modify prompt template engine to inject resume context when available
+- [x] **2.1.3** Integrate profile into `SettingsPanel` component (add ProfileSection as a tab/section)
+- [x] **2.1.4** Modify prompt template engine to inject resume context when available
   - All templates should include resume as grounding context
   - JD should be used to emphasize relevant experience
-- [ ] **2.1.5** Modify `useLLM.ts` → `generateInterviewAnswer` to load and pass profile context
-- [ ] **2.1.6** Test: Set profile → ask behavioral question → verify answer references resume details
+- [x] **2.1.5** Modify `useLLM.ts` → `generateInterviewAnswer` to load and pass profile context
+- [x] **2.1.6** Test: Set profile → ask behavioral question → verify answer references resume details
 
 ### 2.2 Interview Type Classifier (Feature F2)
 > Auto-detect interview type from conversation and switch prompts dynamically.

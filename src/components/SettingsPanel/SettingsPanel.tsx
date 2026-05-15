@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
+import { ProfileSection } from './ProfileSection';
 
 interface SettingsPanelProps {
     onClose: () => void;
@@ -7,7 +8,7 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps) {
-    const [activeTab, setActiveTab] = useState<'models' | 'api'>('models');
+    const [activeTab, setActiveTab] = useState<'profile' | 'models' | 'api'>('profile');
     const [models, setModels] = useState<string[]>([]);
     const [settings, setSettings] = useState({
         whisperModel: 'small.en',
@@ -123,6 +124,16 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                 <div className="flex border-b border-zinc-800">
                     <button
                         className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                            activeTab === 'profile' 
+                                ? 'text-indigo-400 border-b-2 border-indigo-500' 
+                                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50'
+                        }`}
+                        onClick={() => setActiveTab('profile')}
+                    >
+                        Profile & Context
+                    </button>
+                    <button
+                        className={`flex-1 py-2 text-sm font-medium transition-colors ${
                             activeTab === 'models' 
                                 ? 'text-indigo-400 border-b-2 border-indigo-500' 
                                 : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50'
@@ -145,7 +156,9 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
 
                 {/* Content */}
                 <div className="p-4 min-h-[200px]">
-                    {activeTab === 'models' ? (
+                    {activeTab === 'profile' ? (
+                        <ProfileSection />
+                    ) : activeTab === 'models' ? (
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-zinc-300 mb-1">
