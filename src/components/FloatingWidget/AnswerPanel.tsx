@@ -1,5 +1,5 @@
-import { useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Trash2, MessageSquare, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { CopyButton } from '../shared/CopyButton';
 import type { Answer } from '../../state';
@@ -12,6 +12,7 @@ interface AnswerPanelProps {
 }
 
 export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: AnswerPanelProps) {
+    const [showFollowUps, setShowFollowUps] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const current = answers[currentIndex];
 
@@ -21,6 +22,11 @@ export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: Answ
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [current?.answer, current?.isStreaming]);
+
+    // Reset follow-ups toggle when answer changes
+    useEffect(() => {
+        setShowFollowUps(false);
+    }, [currentIndex]);
 
     if (!current) return null;
 
@@ -117,6 +123,30 @@ export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: Answ
                         <span className="streaming-cursor" />
                     )}
                 </div>
+
+                {/* Follow-ups */}
+                {current.followUps && current.followUps.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
+                        <button 
+                            onClick={() => setShowFollowUps(!showFollowUps)}
+                            className="flex items-center text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                            {showFollowUps ? <ChevronDown className="w-3.5 h-3.5 mr-1" /> : <ChevronRightIcon className="w-3.5 h-3.5 mr-1" />}
+                            Likely Follow-up Questions
+                        </button>
+                        
+                        {showFollowUps && (
+                            <ul className="mt-2 space-y-2 animate-fade-in pl-1">
+                                {current.followUps.map((q, i) => (
+                                    <li key={i} className="text-xs text-zinc-300 flex items-start gap-1.5">
+                                        <MessageSquare className="w-3 h-3 text-indigo-500/70 mt-0.5 shrink-0" />
+                                        <span>{q}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Footer actions */}

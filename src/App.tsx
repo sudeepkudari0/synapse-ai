@@ -6,6 +6,7 @@ import { useLLM } from './hooks/useLLM';
 import { useProfile } from './hooks/useProfile';
 import { classifyQuestion } from './lib/interview-classifier';
 import { isQuestion } from './lib/question-detector';
+import { predictFollowUps } from './lib/follow-up-predictor';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
@@ -260,6 +261,14 @@ function App(): JSX.Element {
                 }
             );
             updateAnswer(newAnswer.id, { isStreaming: false });
+
+            // Phase 2.5: Predict Follow-ups asynchronously
+            predictFollowUps(fullTranscript, streamedAnswer, interviewType as any).then(followUps => {
+                if (followUps.length > 0) {
+                    updateAnswer(newAnswer.id, { followUps });
+                }
+            }).catch(err => console.error("Failed to predict follow-ups:", err));
+
         } catch (error) {
             console.error('Failed to generate answer:', error);
             removeAnswer(newAnswer.id);
@@ -314,6 +323,14 @@ function App(): JSX.Element {
                     }
                 );
                 updateAnswer(newAnswer.id, { isStreaming: false });
+
+                // Phase 2.5: Predict Follow-ups asynchronously
+                predictFollowUps(autoTranscript, streamedAnswer, interviewType as any).then(followUps => {
+                    if (followUps.length > 0) {
+                        updateAnswer(newAnswer.id, { followUps });
+                    }
+                }).catch(err => console.error("Failed to predict follow-ups:", err));
+
             } catch (error) {
                 console.error('Failed to auto-generate answer:', error);
                 removeAnswer(newAnswer.id);

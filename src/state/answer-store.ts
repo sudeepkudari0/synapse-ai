@@ -8,6 +8,7 @@ export interface Answer {
     timestamp: Date;
     isStreaming?: boolean;
     detectedType?: string;
+    followUps?: string[];
 }
 
 interface AnswerState {

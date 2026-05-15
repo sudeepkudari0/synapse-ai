@@ -209,15 +209,15 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 2.5 Predictive Follow-Up Engine (Feature F9)
 > Show likely follow-up questions after each answer.
 
-- [ ] **2.5.1** Create `src/lib/follow-up-predictor.ts`
+- [x] **2.5.1** Create `src/lib/follow-up-predictor.ts`
   - `predictFollowUps(question: string, answer: string, interviewType: InterviewType): Promise<string[]>`
   - Prompt: "Based on this interview Q&A, what are the 3 most likely follow-up questions? Return only the questions, numbered 1-3."
   - Returns array of 3 predicted follow-ups
-- [ ] **2.5.2** Integrate into answer generation flow: after main answer completes, fire follow-up prediction
-- [ ] **2.5.3** Add follow-ups display in `AnswerPanel.tsx`
+- [x] **2.5.2** Integrate into answer generation flow: after main answer completes, fire follow-up prediction
+- [x] **2.5.3** Add follow-ups display in `AnswerPanel.tsx`
   - Collapsible section below the main answer: "Likely follow-ups ▸"
   - Shows 3 predicted questions
-- [ ] **2.5.4** Test: Generate answer → verify follow-ups appear within 2-3 seconds after answer completes
+- [x] **2.5.4** Test: Generate answer → verify follow-ups appear within 2-3 seconds after answer completes
 
 ---
 
