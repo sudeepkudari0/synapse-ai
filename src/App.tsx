@@ -4,6 +4,7 @@ import { useWhisper } from './hooks/useWhisper';
 import { useMixedAudioRecorder, SpeakerSource } from './hooks/useMixedAudioRecorder';
 import { useLLM } from './hooks/useLLM';
 import { useProfile } from './hooks/useProfile';
+import { classifyQuestion } from './lib/interview-classifier';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
@@ -180,6 +181,18 @@ function App(): JSX.Element {
         const fullTranscript = conversationRef.current.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
         if (!fullTranscript.trim()) return;
 
+        // Fetch current settings to get interviewType and detection mode
+        const settingsRes = await window.electronAPI.getSettings();
+        let interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
+        const isAutoDetect = settingsRes.success && settingsRes.settings ? settingsRes.settings.questionDetectionMode !== 'manual' : true;
+
+        if (isAutoDetect) {
+            const detected = classifyQuestion(fullTranscript);
+            if (detected !== 'general') {
+                interviewType = detected;
+            }
+        }
+
         const newAnswer: Answer = {
             id: Date.now().toString(),
             source: 'transcript',
@@ -187,6 +200,7 @@ function App(): JSX.Element {
             answer: '',
             timestamp: new Date(),
             isStreaming: true,
+            detectedType: interviewType,
         };
 
         addAnswer(newAnswer);
@@ -195,10 +209,6 @@ function App(): JSX.Element {
         try {
             let streamedAnswer = '';
             
-            // Fetch current settings to get interviewType
-            const settingsRes = await window.electronAPI.getSettings();
-            const interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
-
             await generateAnswerWithTemplate(
                 {
                     interviewType: interviewType as any,
@@ -225,24 +235,33 @@ function App(): JSX.Element {
         const autoTranscript = recentBlocks.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
         if (!autoTranscript.trim()) return;
 
-        const newAnswer: Answer = {
-            id: Date.now().toString(),
-            source: 'transcript',
-            question: autoTranscript,
-            answer: '',
-            timestamp: new Date(),
-            isStreaming: true,
-        };
-
-        addAnswer(newAnswer);
-        setExpanded(true);
-
         (async () => {
+            const settingsRes = await window.electronAPI.getSettings();
+            let interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
+            const isAutoDetect = settingsRes.success && settingsRes.settings ? settingsRes.settings.questionDetectionMode !== 'manual' : true;
+
+            if (isAutoDetect) {
+                const detected = classifyQuestion(autoTranscript);
+                if (detected !== 'general') {
+                    interviewType = detected;
+                }
+            }
+
+            const newAnswer: Answer = {
+                id: Date.now().toString(),
+                source: 'transcript',
+                question: autoTranscript,
+                answer: '',
+                timestamp: new Date(),
+                isStreaming: true,
+                detectedType: interviewType,
+            };
+
+            addAnswer(newAnswer);
+            setExpanded(true);
+
             try {
                 let streamedAnswer = '';
-                
-                const settingsRes = await window.electronAPI.getSettings();
-                const interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
 
                 await generateAnswerWithTemplate(
                     {

@@ -32,6 +32,11 @@ export function AnswerPanel({ answers, currentIndex, onNavigate, onClear }: Answ
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         AI Response
                     </span>
+                    {current.detectedType && current.detectedType !== 'general' && (
+                        <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 ml-1">
+                            Detected: {current.detectedType.replace('-', ' ')}
+                        </span>
+                    )}
 
                     {/* Answer counter */}
                     {answers.length > 1 && (

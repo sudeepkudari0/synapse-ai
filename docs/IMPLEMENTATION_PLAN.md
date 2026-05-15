@@ -161,17 +161,17 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 2.2 Interview Type Classifier (Feature F2)
 > Auto-detect interview type from conversation and switch prompts dynamically.
 
-- [ ] **2.2.1** Create `src/lib/interview-classifier.ts`
+- [x] **2.2.1** Create `src/lib/interview-classifier.ts`
   - `classifyQuestion(text: string): InterviewType` — keyword scoring (instant, no LLM)
   - Keyword maps: behavioral words (tell me about a time, describe a situation, conflict, challenge), technical (implement, algorithm, data structure, complexity), system design (design a, scale, architecture, database), HR (salary, why this company, where do you see yourself, strengths/weaknesses), coding (write code, function, solve, output)
   - Confidence threshold: if score is ambiguous, return `general`
-- [ ] **2.2.2** Create `src/lib/interview-classifier.test.ts` (optional but recommended)
+- [x] **2.2.2** Create `src/lib/interview-classifier.test.ts` (optional but recommended)
   - Test against 20+ real interview questions per category
-- [ ] **2.2.3** Integrate classifier into answer generation flow in App.tsx / session-store
+- [x] **2.2.3** Integrate classifier into answer generation flow in App.tsx / session-store
   - On question detection → classify → pass type to prompt template engine
   - Store detected type in session state
-- [ ] **2.2.4** Add visual indicator in overlay header showing detected interview type (small badge)
-- [ ] **2.2.5** Test: Ask different question types → verify prompt template switches correctly
+- [x] **2.2.4** Add visual indicator in overlay header showing detected interview type (small badge)
+- [x] **2.2.5** Test: Ask different question types → verify prompt template switches correctly
 
 ### 2.3 Smart Question Detection (Feature F4)
 > Replace fragile regex with LLM-powered detection.

@@ -16,7 +16,9 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         groqApiKey: '',
         useOllamaOnly: false,
         ollamaModel: 'qwen3-vl:2b',
-        ollamaBaseUrl: 'http://localhost:11434/v1'
+        ollamaBaseUrl: 'http://localhost:11434/v1',
+        interviewType: 'general',
+        questionDetectionMode: 'auto'
     });
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [isTesting, setIsTesting] = useState(false);
@@ -47,7 +49,9 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     groqApiKey: settingsRes.settings.groqApiKey || '',
                     useOllamaOnly: settingsRes.settings.useOllamaOnly || false,
                     ollamaModel: settingsRes.settings.ollamaModel || 'qwen3-vl:2b',
-                    ollamaBaseUrl: settingsRes.settings.ollamaBaseUrl || 'http://localhost:11434/v1'
+                    ollamaBaseUrl: settingsRes.settings.ollamaBaseUrl || 'http://localhost:11434/v1',
+                    interviewType: settingsRes.settings.interviewType || 'general',
+                    questionDetectionMode: settingsRes.settings.questionDetectionMode || 'auto'
                 });
             }
         } catch (error) {
@@ -157,7 +161,48 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                 {/* Content */}
                 <div className="p-4 min-h-[200px]">
                     {activeTab === 'profile' ? (
-                        <ProfileSection />
+                        <div className="space-y-6">
+                            <ProfileSection />
+                            
+                            <div className="border-t border-zinc-800 pt-4 mt-2">
+                                <h3 className="text-sm font-semibold text-white mb-3">Interview Context</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                            Default Interview Type
+                                        </label>
+                                        <select
+                                            value={settings.interviewType}
+                                            onChange={(e) => setSettings({ ...settings, interviewType: e.target.value })}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="general">General</option>
+                                            <option value="behavioral">Behavioral (STAR Method)</option>
+                                            <option value="technical">Technical</option>
+                                            <option value="system-design">System Design</option>
+                                            <option value="coding">Coding</option>
+                                            <option value="hr-screening">HR Screening</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                            Question Detection Mode
+                                        </label>
+                                        <select
+                                            value={settings.questionDetectionMode}
+                                            onChange={(e) => setSettings({ ...settings, questionDetectionMode: e.target.value })}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="auto">Auto-detect (Keyword Classifier)</option>
+                                            <option value="manual">Manual (Always use Default)</option>
+                                        </select>
+                                        <p className="text-[10px] text-zinc-500 mt-1">
+                                            Auto-detect will try to classify the question and dynamically switch to the right answer template.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     ) : activeTab === 'models' ? (
                         <div className="space-y-4">
                             <div>
