@@ -18,7 +18,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         ollamaModel: 'qwen3-vl:2b',
         ollamaBaseUrl: 'http://localhost:11434/v1',
         interviewType: 'general',
-        questionDetectionMode: 'auto'
+        questionDetectionMode: 'auto',
+        showDeliveryMetrics: true
     });
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [isTesting, setIsTesting] = useState(false);
@@ -51,7 +52,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     ollamaModel: settingsRes.settings.ollamaModel || 'qwen3-vl:2b',
                     ollamaBaseUrl: settingsRes.settings.ollamaBaseUrl || 'http://localhost:11434/v1',
                     interviewType: settingsRes.settings.interviewType || 'general',
-                    questionDetectionMode: settingsRes.settings.questionDetectionMode || 'auto'
+                    questionDetectionMode: settingsRes.settings.questionDetectionMode || 'auto',
+                    showDeliveryMetrics: settingsRes.settings.showDeliveryMetrics !== false
                 });
             }
         } catch (error) {
@@ -199,6 +201,23 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                         <p className="text-[10px] text-zinc-500 mt-1">
                                             Auto-detect will try to classify the question and dynamically switch to the right answer template.
                                         </p>
+                                    </div>
+                                    <div className="pt-2 border-t border-zinc-800/50 flex items-center justify-between">
+                                        <div>
+                                            <label className="block text-xs font-medium text-white">Live Delivery Metrics</label>
+                                            <p className="text-[10px] text-zinc-500">Show talk-time and pacing stats while recording</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSettings({ ...settings, showDeliveryMetrics: !settings.showDeliveryMetrics })}
+                                            className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                                                settings.showDeliveryMetrics ? 'bg-indigo-500' : 'bg-zinc-700'
+                                            }`}
+                                        >
+                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                                settings.showDeliveryMetrics ? 'translate-x-3.5' : 'translate-x-0.5'
+                                            }`} />
+                                        </button>
                                     </div>
                                 </div>
                             </div>

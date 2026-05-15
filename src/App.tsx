@@ -7,6 +7,7 @@ import { useProfile } from './hooks/useProfile';
 import { classifyQuestion } from './lib/interview-classifier';
 import { isQuestion } from './lib/question-detector';
 import { predictFollowUps } from './lib/follow-up-predictor';
+import { analyzeDelivery } from './lib/delivery-analyzer';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
@@ -171,9 +172,10 @@ function App(): JSX.Element {
                 autoGenerateTimeoutRef.current = null;
             }
 
-            // Phase 2.4: Auto-save session on stop
+            // Phase 2.4/3.2: Auto-save session with metrics on stop
             if (conversationRef.current.length > 0 || answers.length > 0) {
                 try {
+                    const metrics = analyzeDelivery(conversationRef.current, sessionTime);
                     const sessionData = {
                         id: Date.now().toString(),
                         timestamp: new Date().toISOString(),
@@ -182,6 +184,7 @@ function App(): JSX.Element {
                         questionCount: answers.length,
                         transcript: conversationRef.current,
                         answers: answers,
+                        metrics: metrics,
                     };
                     const res = await window.electronAPI.session.save(sessionData);
                     if (!res.success) {

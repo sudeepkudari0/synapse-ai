@@ -9,6 +9,7 @@ interface SessionDetailProps {
         type: string;
         transcript: ChatBlock[];
         answers: Answer[];
+        metrics?: any;
     };
     onClose: () => void;
     onBack: () => void;
@@ -84,6 +85,42 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
 
             {/* Content */}
             <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                {session.metrics && (
+                    <div>
+                        <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-zinc-800 pb-1">
+                            Delivery Metrics
+                        </h3>
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-center">
+                                <div className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest">Talk Ratio</div>
+                                <div className="text-lg font-medium text-indigo-400">{Math.round(session.metrics.talkTimeRatio * 100)}%</div>
+                            </div>
+                            <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-center">
+                                <div className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest">Filler Words</div>
+                                <div className="text-lg font-medium text-amber-400">{session.metrics.fillerWordCount}</div>
+                            </div>
+                            <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-center">
+                                <div className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest">Pacing</div>
+                                <div className="text-lg font-medium text-emerald-400">{session.metrics.wpm} <span className="text-[10px]">WPM</span></div>
+                            </div>
+                        </div>
+                        {session.metrics.fillerWordCount > 0 && (
+                            <div className="mt-3 bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+                                <div className="text-[10px] text-zinc-500 mb-2 uppercase tracking-widest">Common Fillers Used</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {Object.entries(session.metrics.fillerWords)
+                                        .sort(([, a]: any, [, b]: any) => b - a)
+                                        .map(([word, count]) => (
+                                            <span key={word} className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-md text-[10px] text-zinc-400">
+                                                "{word}" <span className="text-amber-500/70 ml-1">×{count as React.ReactNode}</span>
+                                            </span>
+                                        ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div>
                     <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-zinc-800 pb-1">
                         <FileText className="w-3.5 h-3.5" />

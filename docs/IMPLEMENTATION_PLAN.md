@@ -243,23 +243,23 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 3.2 Delivery Analytics (Feature F6)
 > Analyze user's speaking patterns and provide real-time feedback.
 
-- [ ] **3.2.1** Create `src/lib/delivery-analyzer.ts`
+- [x] **3.2.1** Create `src/lib/delivery-analyzer.ts`
   - Input: conversation blocks (user's blocks only)
   - Output: `DeliveryMetrics { fillerWordCount, fillerWords: Map<string,number>, totalWords, avgAnswerDuration, talkTimeRatio, uniqueWordRatio, longestPause }`
   - Filler words list: um, uh, like, you know, basically, actually, literally, right, so, I mean
   - Talk-time ratio: user speaking time / total session time
-- [ ] **3.2.2** Create `src/components/DeliveryMetrics/MetricsBar.tsx`
+- [x] **3.2.2** Create `src/components/DeliveryMetrics/MetricsBar.tsx`
   - Small horizontal bar at bottom of overlay (when recording)
   - Shows: 🎤 Talk: 45% | 📝 Fillers: 12 | ⏱ Avg: 1:45
   - Updates every 10 seconds (not every frame)
-- [ ] **3.2.3** Create `src/components/DeliveryMetrics/MetricsReport.tsx`
+- [x] **3.2.3** Create `src/components/DeliveryMetrics/MetricsReport.tsx`
   - Post-session detailed report
   - Filler word breakdown (which words, how many times)
   - Talk-time chart (simple text-based, no charting library needed)
   - Improvement suggestions based on metrics
-- [ ] **3.2.4** Integrate analytics into session save: include `DeliveryMetrics` in saved session data
-- [ ] **3.2.5** Add analytics toggle in Settings: "Show delivery metrics during session" (default: on)
-- [ ] **3.2.6** Test: Record a session → verify metrics bar shows live data → stop → verify report
+- [x] **3.2.4** Integrate analytics into session save: include `DeliveryMetrics` in saved session data
+- [x] **3.2.5** Add analytics toggle in Settings: "Show delivery metrics during session" (default: on)
+- [x] **3.2.6** Test: Record a session → verify metrics bar shows live data → stop → verify report
 
 ### 3.3 Practice Mode — Mock Interviews (Feature F7)
 > AI-driven mock interviews for daily practice.

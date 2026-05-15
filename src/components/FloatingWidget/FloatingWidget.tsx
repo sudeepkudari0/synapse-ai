@@ -6,6 +6,7 @@ import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import { ChatPanel } from '../ChatPanel/ChatPanel';
 import { SessionHistory } from '../SessionHistory/SessionHistory';
 import { SessionDetail } from '../SessionHistory/SessionDetail';
+import { MetricsBar } from '../DeliveryMetrics/MetricsBar';
 import type { ChatBlock, Answer } from '../../state';
 import './FloatingWidget.css';
 
@@ -206,6 +207,13 @@ export function FloatingWidget({
                                     onClear={onClearAnswers}
                                 />
                             )}
+
+                            {/* Delivery Metrics Bar */}
+                            <MetricsBar 
+                                conversation={conversation} 
+                                sessionTime={sessionTime} 
+                                isRecording={isRecording} 
+                            />
                         </>
                     )}
                 </div>
