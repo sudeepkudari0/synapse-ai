@@ -1,4 +1,4 @@
-import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle } from 'lucide-react';
+import { Mic, MicOff, Camera, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle, History } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { PulsingDot } from '../shared/PulsingDot';
 import { useDrag } from '../../hooks/useDrag';
@@ -16,6 +16,7 @@ interface WidgetHeaderProps {
     onGenerateAnswer: () => void;
     onOpenSettings: () => void;
     onToggleChat: () => void;
+    onToggleHistory: () => void;
     onClose: () => void;
 }
 
@@ -32,6 +33,7 @@ export function WidgetHeader({
     onGenerateAnswer,
     onOpenSettings,
     onToggleChat,
+    onToggleHistory,
     onClose,
 }: WidgetHeaderProps) {
     const { onMouseDown } = useDrag();
@@ -113,6 +115,15 @@ export function WidgetHeader({
                     title="Settings"
                 >
                     <Settings className="w-4 h-4" />
+                </IconButton>
+
+                {/* History */}
+                <IconButton
+                    id="btn-toggle-history"
+                    onClick={onToggleHistory}
+                    title="Interview History"
+                >
+                    <History className="w-4 h-4" />
                 </IconButton>
 
                 {/* Chat */}

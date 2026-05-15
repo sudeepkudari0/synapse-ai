@@ -1,9 +1,11 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
 import { AnswerPanel } from './AnswerPanel';
 import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import { ChatPanel } from '../ChatPanel/ChatPanel';
+import { SessionHistory } from '../SessionHistory/SessionHistory';
+import { SessionDetail } from '../SessionHistory/SessionDetail';
 import type { ChatBlock, Answer } from '../../state';
 import './FloatingWidget.css';
 
@@ -12,6 +14,7 @@ interface FloatingWidgetProps {
     isExpanded: boolean;
     isSettingsOpen: boolean;
     isChatOpen: boolean;
+    isHistoryOpen: boolean;
     isRecording: boolean;
     isCapturing: boolean;
     isGenerating: boolean;
@@ -32,6 +35,7 @@ interface FloatingWidgetProps {
     onNavigateAnswer: (index: number) => void;
     onToggleSettings: () => void;
     onToggleChat: () => void;
+    onToggleHistory: () => void;
     onSettingsChanged: () => void;
     onClose: () => void;
 }
@@ -58,10 +62,31 @@ export function FloatingWidget({
     onNavigateAnswer,
     onToggleSettings,
     onToggleChat,
+    onToggleHistory,
     onSettingsChanged,
     onClose,
 }: FloatingWidgetProps) {
     const widgetRef = useRef<HTMLDivElement>(null);
+    const prevAnswerCount = useRef(answers.length);
+    const [selectedSession, setSelectedSession] = useState<any>(null);
+
+    // Reset selected session when history is toggled
+    useEffect(() => {
+        if (!isHistoryOpen) {
+            setSelectedSession(null);
+        }
+    }, [isHistoryOpen]);
+
+    const handleLoadSession = async (id: string) => {
+        try {
+            const res = await window.electronAPI.session.load(id);
+            if (res.success && res.session) {
+                setSelectedSession(res.session);
+            }
+        } catch (error) {
+            console.error('Failed to load session details:', error);
+        }
+    };
 
     // ─── Click-through management ───
     // Widget-level: when mouse enters the widget container, disable click-through.
@@ -87,7 +112,6 @@ export function FloatingWidget({
     }, []);
 
     // Auto-expand when answers arrive
-    const prevAnswerCount = useRef(answers.length);
     useEffect(() => {
         if (answers.length > prevAnswerCount.current) {
             // New answer arrived — expand widget
@@ -119,12 +143,13 @@ export function FloatingWidget({
                     onGenerateAnswer={onGenerateAnswer}
                     onOpenSettings={onToggleSettings}
                     onToggleChat={onToggleChat}
+                    onToggleHistory={onToggleHistory}
                     onClose={onClose}
                 />
 
                 {/* Expandable content */}
                 <div className="widget-body">
-                    {/* Settings/Chat Panels override other content when open */}
+                    {/* Settings/Chat/History Panels override other content when open */}
                     {isSettingsOpen ? (
                         <SettingsPanel 
                             onClose={onToggleSettings} 
@@ -132,6 +157,19 @@ export function FloatingWidget({
                         />
                     ) : isChatOpen ? (
                         <ChatPanel onClose={onToggleChat} />
+                    ) : isHistoryOpen ? (
+                        selectedSession ? (
+                            <SessionDetail 
+                                session={selectedSession} 
+                                onClose={onToggleHistory} 
+                                onBack={() => setSelectedSession(null)} 
+                            />
+                        ) : (
+                            <SessionHistory 
+                                onClose={onToggleHistory} 
+                                onLoadSession={handleLoadSession} 
+                            />
+                        )
                     ) : (
                         <>
                             {/* Loading indicator */}

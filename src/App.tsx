@@ -23,8 +23,8 @@ function App(): JSX.Element {
     } = useAnswerStore();
 
     const {
-        isExpanded, isSettingsOpen, isChatOpen, isCapturing,
-        toggleExpanded, setExpanded, toggleSettings, toggleChat, setCapturing,
+        isExpanded, isSettingsOpen, isChatOpen, isHistoryOpen, isCapturing,
+        toggleExpanded, setExpanded, toggleSettings, toggleChat, toggleHistory, setCapturing,
     } = useUIStore();
 
     // ─── Refs (not state — no re-render needed) ───
@@ -169,6 +169,28 @@ function App(): JSX.Element {
                 clearTimeout(autoGenerateTimeoutRef.current);
                 autoGenerateTimeoutRef.current = null;
             }
+
+            // Phase 2.4: Auto-save session on stop
+            if (conversationRef.current.length > 0 || answers.length > 0) {
+                try {
+                    const sessionData = {
+                        id: Date.now().toString(),
+                        timestamp: new Date().toISOString(),
+                        duration: sessionTime,
+                        type: 'general', // You could use a detected or selected type here if available
+                        questionCount: answers.length,
+                        transcript: conversationRef.current,
+                        answers: answers,
+                    };
+                    const res = await window.electronAPI.session.save(sessionData);
+                    if (!res.success) {
+                        console.error('Failed to save session:', res.error);
+                    }
+                } catch (error) {
+                    console.error('Error saving session:', error);
+                }
+            }
+
         } else {
             try {
                 if (!isModelLoaded && !isModelLoading) {
@@ -384,6 +406,7 @@ function App(): JSX.Element {
             isExpanded={isExpanded}
             isSettingsOpen={isSettingsOpen}
             isChatOpen={isChatOpen}
+            isHistoryOpen={isHistoryOpen}
             isRecording={isRecording}
             isCapturing={isCapturing}
             isGenerating={isGenerating}
@@ -402,6 +425,7 @@ function App(): JSX.Element {
             onNavigateAnswer={navigateAnswer}
             onToggleSettings={toggleSettings}
             onToggleChat={toggleChat}
+            onToggleHistory={toggleHistory}
             onSettingsChanged={handleSettingsChanged}
             onClose={handleClose}
         />

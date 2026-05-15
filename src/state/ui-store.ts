@@ -5,6 +5,7 @@ interface UIState {
     isExpanded: boolean;
     isSettingsOpen: boolean;
     isChatOpen: boolean;
+    isHistoryOpen: boolean;
     isCapturing: boolean;
 
     // Actions
@@ -14,6 +15,8 @@ interface UIState {
     setSettingsOpen: (open: boolean) => void;
     toggleChat: () => void;
     setChatOpen: (open: boolean) => void;
+    toggleHistory: () => void;
+    setHistoryOpen: (open: boolean) => void;
     setCapturing: (capturing: boolean) => void;
 }
 
@@ -22,6 +25,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     isExpanded: false,
     isSettingsOpen: false,
     isChatOpen: false,
+    isHistoryOpen: false,
     isCapturing: false,
 
     // Actions
@@ -30,8 +34,8 @@ export const useUIStore = create<UIState>((set, get) => ({
             const willCollapse = state.isExpanded;
             return {
                 isExpanded: !state.isExpanded,
-                // Close settings and chat when collapsing
-                ...(willCollapse ? { isSettingsOpen: false, isChatOpen: false } : {}),
+                // Close settings, chat and history when collapsing
+                ...(willCollapse ? { isSettingsOpen: false, isChatOpen: false, isHistoryOpen: false } : {}),
             };
         }),
 
@@ -42,9 +46,9 @@ export const useUIStore = create<UIState>((set, get) => ({
             const willBeOpen = !state.isSettingsOpen;
             return {
                 isSettingsOpen: willBeOpen,
-                // Close chat when opening settings, expand widget if needed
+                // Close chat and history when opening settings, expand widget if needed
                 ...(willBeOpen
-                    ? { isChatOpen: false, isExpanded: true }
+                    ? { isChatOpen: false, isHistoryOpen: false, isExpanded: true }
                     : {}),
             };
         }),
@@ -56,14 +60,28 @@ export const useUIStore = create<UIState>((set, get) => ({
             const willBeOpen = !state.isChatOpen;
             return {
                 isChatOpen: willBeOpen,
-                // Close settings when opening chat, expand widget if needed
+                // Close settings and history when opening chat, expand widget if needed
                 ...(willBeOpen
-                    ? { isSettingsOpen: false, isExpanded: true }
+                    ? { isSettingsOpen: false, isHistoryOpen: false, isExpanded: true }
                     : {}),
             };
         }),
 
     setChatOpen: (open) => set({ isChatOpen: open }),
+
+    toggleHistory: () =>
+        set((state) => {
+            const willBeOpen = !state.isHistoryOpen;
+            return {
+                isHistoryOpen: willBeOpen,
+                // Close settings and chat when opening history, expand widget if needed
+                ...(willBeOpen
+                    ? { isSettingsOpen: false, isChatOpen: false, isExpanded: true }
+                    : {}),
+            };
+        }),
+
+    setHistoryOpen: (open) => set({ isHistoryOpen: open }),
 
     setCapturing: (capturing) => set({ isCapturing: capturing }),
 }));

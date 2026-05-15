@@ -190,21 +190,21 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 2.4 Session Persistence (Feature F3)
 > Auto-save sessions, browse history, review past interviews.
 
-- [ ] **2.4.1** Auto-save session on `stopRecording()`
+- [x] **2.4.1** Auto-save session on `stopRecording()`
   - Collect: conversation, answers, sessionTime, detected interviewType, timestamp
   - Save via `session:save` IPC
-- [ ] **2.4.2** Create `src/components/SessionHistory/SessionHistory.tsx`
+- [x] **2.4.2** Create `src/components/SessionHistory/SessionHistory.tsx`
   - List of past sessions with: date, duration, interview type, question count
   - Click to expand: full transcript + answers
   - Delete button per session
-- [ ] **2.4.3** Create `src/components/SessionHistory/SessionDetail.tsx`
+- [x] **2.4.3** Create `src/components/SessionHistory/SessionDetail.tsx`
   - Full transcript view with speaker labels
   - All Q&A pairs with answers
   - Session metadata (duration, type, timestamp)
-- [ ] **2.4.4** Add "History" button/tab in widget header (alongside Settings and Chat)
-- [ ] **2.4.5** Wire up IPC: load session list on History open, load full session on click
-- [ ] **2.4.6** Add session export: "Copy as Markdown" button that copies full session to clipboard
-- [ ] **2.4.7** Test: Complete a recording session → stop → reopen app → verify session appears in history
+- [x] **2.4.4** Add "History" button/tab in widget header (alongside Settings and Chat)
+- [x] **2.4.5** Wire up IPC: load session list on History open, load full session on click
+- [x] **2.4.6** Add session export: "Copy as Markdown" button that copies full session to clipboard
+- [x] **2.4.7** Test: Complete a recording session → stop → reopen app → verify session appears in history
 
 ### 2.5 Predictive Follow-Up Engine (Feature F9)
 > Show likely follow-up questions after each answer.
