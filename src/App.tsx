@@ -5,6 +5,7 @@ import { useMixedAudioRecorder, SpeakerSource } from './hooks/useMixedAudioRecor
 import { useLLM } from './hooks/useLLM';
 import { useProfile } from './hooks/useProfile';
 import { classifyQuestion } from './lib/interview-classifier';
+import { isQuestion } from './lib/question-detector';
 import { TranscriptStabilizer } from './lib/transcript-stabilizer';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
@@ -34,6 +35,7 @@ function App(): JSX.Element {
     const conversationRef = useRef<ChatBlock[]>([]);
     const autoGenerateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const lastAnswerTimeRef = useRef<number>(0);
 
     // Sync conversationRef with store
     useEffect(() => {
@@ -107,17 +109,27 @@ function App(): JSX.Element {
                             // -- AUTO ANSWER LOGIC --
                             const currentLastBlock = newConv[newConv.length - 1];
                             if (currentLastBlock.speaker === 'interviewer') {
-                                const lowerText = currentLastBlock.text.toLowerCase().trim();
-                                const isLikelyQuestion = currentLastBlock.text.includes('?') ||
-                                    /^(what|where|when|why|who|how|can you|could you|tell me|would you|do you|please explain|is there|are there)/.test(lowerText);
-
                                 if (autoGenerateTimeoutRef.current) {
                                     clearTimeout(autoGenerateTimeoutRef.current);
                                 }
 
-                                if (isLikelyQuestion) {
-                                    autoGenerateTimeoutRef.current = setTimeout(() => {
-                                        triggerAutoAnswer();
+                                // 10s cooldown to prevent spamming answers
+                                const now = Date.now();
+                                if (now - lastAnswerTimeRef.current > 10000) {
+                                    autoGenerateTimeoutRef.current = setTimeout(async () => {
+                                        // Run smart detection
+                                        const contextTexts = newConv.slice(0, -1).map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`);
+                                        
+                                        // Fetch current settings for detection mode
+                                        const settingsRes = await window.electronAPI.getSettings();
+                                        const mode = settingsRes.success && settingsRes.settings ? settingsRes.settings.questionDetectionMode : 'hybrid';
+                                        
+                                        const result = await isQuestion(currentLastBlock.text, contextTexts, mode as any);
+                                        
+                                        if (result.isQuestion) {
+                                            lastAnswerTimeRef.current = Date.now();
+                                            triggerAutoAnswer();
+                                        }
                                     }, 1500);
                                 }
                             } else if (currentLastBlock.speaker === 'user') {
@@ -180,6 +192,8 @@ function App(): JSX.Element {
     const handleGenerateAnswer = async () => {
         const fullTranscript = conversationRef.current.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
         if (!fullTranscript.trim()) return;
+
+        lastAnswerTimeRef.current = Date.now();
 
         // Fetch current settings to get interviewType and detection mode
         const settingsRes = await window.electronAPI.getSettings();

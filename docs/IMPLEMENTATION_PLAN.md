@@ -176,16 +176,16 @@ docs/strategy/          → Strategic analysis (4 parts)
 ### 2.3 Smart Question Detection (Feature F4)
 > Replace fragile regex with LLM-powered detection.
 
-- [ ] **2.3.1** Create `src/lib/question-detector.ts`
+- [x] **2.3.1** Create `src/lib/question-detector.ts`
   - `isQuestion(text: string, context: string[]): Promise<{isQuestion: boolean, confidence: number}>`
   - Uses a lightweight Ollama call with a classification-only prompt
   - Prompt: "Given this conversation context, is the last statement a question or prompt that expects a response? Reply only YES or NO."
   - Timeout: 500ms max — if LLM doesn't respond, fall back to regex
-- [ ] **2.3.2** Add configurable setting: `questionDetectionMode: 'regex' | 'llm' | 'hybrid'`
+- [x] **2.3.2** Add configurable setting: `questionDetectionMode: 'regex' | 'llm' | 'hybrid'`
   - `hybrid` (default): try LLM, fall back to regex on timeout
-- [ ] **2.3.3** Replace regex block in App.tsx (lines 96-109) with new detector
-- [ ] **2.3.4** Add debounce/cooldown: don't re-trigger if an answer was generated in last 10 seconds
-- [ ] **2.3.5** Test: "Walk me through your last project." → should detect as question (no `?` present)
+- [x] **2.3.3** Replace regex block in App.tsx (lines 96-109) with new detector
+- [x] **2.3.4** Add debounce/cooldown: don't re-trigger if an answer was generated in last 10 seconds
+- [x] **2.3.5** Test: "Walk me through your last project." → should detect as question (no `?` present)
 
 ### 2.4 Session Persistence (Feature F3)
 > Auto-save sessions, browse history, review past interviews.
