@@ -1,11 +1,23 @@
 import { create } from 'zustand';
 
+export interface Story {
+    id: string;
+    title: string;
+    situation: string;
+    task: string;
+    action: string;
+    result: string;
+    tags: string[];  // e.g., 'leadership', 'conflict', 'failure', 'teamwork', 'innovation'
+    metrics: string[]; // e.g., '20% revenue increase', 'reduced latency by 3x'
+}
+
 export interface UserProfile {
     resume: string;
     jobDescription: string;
     targetCompany: string;
     targetRole: string;
     skills: string[];
+    stories: Story[];
 }
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -14,6 +26,7 @@ const DEFAULT_PROFILE: UserProfile = {
     targetCompany: '',
     targetRole: '',
     skills: [],
+    stories: [],
 };
 
 interface ProfileState {

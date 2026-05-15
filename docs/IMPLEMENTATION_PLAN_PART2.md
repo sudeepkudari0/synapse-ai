@@ -56,66 +56,66 @@
 ### 5.1 Behavioral Interview Enhancements
 > Story bank and authenticity guard.
 
-- [ ] **5.1.1** Add `stories[]` to user profile
+- [x] **5.1.1** Add `stories[]` to user profile
   - Each story: `{ title, situation, task, action, result, tags[], metrics[] }`
   - Example tags: leadership, conflict, failure, teamwork, innovation
-- [ ] **5.1.2** Create `src/components/SettingsPanel/StoryBank.tsx`
+- [x] **5.1.2** Create `src/components/SettingsPanel/StoryBank.tsx`
   - CRUD interface for career stories
   - Tag assignment per story
   - "Auto-generate from resume" button (LLM extracts potential stories from resume text)
-- [ ] **5.1.3** Modify behavioral prompt template to include story bank
+- [x] **5.1.3** Modify behavioral prompt template to include story bank
   - Prompt: "Match the question to the most relevant story from the candidate's story bank"
   - If no matching story: generate a generic STAR answer but flag it as "⚠️ No matching story — consider preparing one"
-- [ ] **5.1.4** Add authenticity guard: post-generation check
+- [x] **5.1.4** Add authenticity guard: post-generation check
   - If generated answer contains claims not in resume or story bank, add footnote: "⚠️ Verify: this detail isn't in your profile"
-- [ ] **5.1.5** Test: Add 3 stories → ask behavioral question → verify answer maps to relevant story
+- [x] **5.1.5** Test: Add 3 stories → ask behavioral question → verify answer maps to relevant story
 
 ### 5.2 System Design Enhancements
 > Phase tracking and estimation helpers.
 
-- [ ] **5.2.1** Create `src/lib/system-design-helper.ts`
+- [x] **5.2.1** Create `src/lib/system-design-helper.ts`
   - `detectPhase(transcript: string): 'requirements' | 'estimation' | 'high-level' | 'deep-dive' | 'trade-offs'`
   - Keyword-based phase detection from conversation flow
-- [ ] **5.2.2** Add phase indicator in overlay when system-design type is detected
+- [x] **5.2.2** Add phase indicator in overlay when system-design type is detected
   - Shows: "📐 Phase: High-Level Design" with suggested transition prompts
-- [ ] **5.2.3** Create estimation helper functions
+- [x] **5.2.3** Create estimation helper functions
   - `estimateQPS(users, actionsPerDay)`, `estimateStorage(recordSize, recordsPerDay, retentionYears)`
   - Triggered when estimation-related keywords detected in transcript
   - Shows quick calculation in a tooltip/popover
-- [ ] **5.2.4** Modify system-design prompt to include "suggest components" based on problem type
+- [x] **5.2.4** Modify system-design prompt to include "suggest components" based on problem type
   - Auto-suggest: load balancer, cache, message queue, CDN, database type based on requirements
-- [ ] **5.2.5** Test: Mock system design conversation → verify phase detection and component suggestions
+- [x] **5.2.5** Test: Mock system design conversation → verify phase detection and component suggestions
 
 ### 5.3 HR/Screening Enhancements
 > Salary handling and red flag framing.
 
-- [ ] **5.3.1** Add salary preferences to profile
+- [x] **5.3.1** Add salary preferences to profile
   - Fields: `currentSalary`, `targetSalary`, `negotiationStrategy: 'deflect' | 'anchor-high' | 'market-rate'`
-- [ ] **5.3.2** Create salary question detector in `interview-classifier.ts`
+- [x] **5.3.2** Create salary question detector in `interview-classifier.ts`
   - Detect: compensation, salary, pay, package, benefits, equity
   - When detected: switch to salary-specific prompt with user's strategy
-- [ ] **5.3.3** Add red-flag question detector
+- [x] **5.3.3** Add red-flag question detector
   - Detect: gap in resume, why did you leave, fired, terminated, short tenure
   - Auto-switch to diplomatic framing prompt
-- [ ] **5.3.4** Enforce conciseness in HR prompts: hard limit at 150 words
-- [ ] **5.3.5** Test: "What are your salary expectations?" → verify deflection/anchoring based on setting
+- [x] **5.3.4** Enforce conciseness in HR prompts: hard limit at 150 words
+- [x] **5.3.5** Test: "What are your salary expectations?" → verify deflection/anchoring based on setting
 
 ### 5.4 Company-Specific Prep Database (Feature F10)
 > Curated interview patterns per company.
 
-- [ ] **5.4.1** Create `src/data/companies/` directory
+- [x] **5.4.1** Create `src/data/companies/` directory
   - JSON files per company: `amazon.json`, `google.json`, `meta.json`, `microsoft.json`, `apple.json`
   - Schema: `{ name, values[], interviewStructure, commonQuestions[], evaluationCriteria[], tips[] }`
-- [ ] **5.4.2** Create initial data for top 10 companies
+- [x] **5.4.2** Create initial data for top 10 companies
   - Amazon (16 Leadership Principles), Google (Googleyness, L3-L7 expectations), Meta (move fast values), Microsoft (growth mindset), Apple (secrecy/attention to detail)
   - Plus: Netflix, Stripe, Uber, Airbnb, LinkedIn
-- [ ] **5.4.3** Create `src/lib/company-context.ts`
+- [x] **5.4.3** Create `src/lib/company-context.ts`
   - `getCompanyContext(companyName: string): CompanyData | null`
   - Fuzzy matching on company name from profile
-- [ ] **5.4.4** Integrate company context into prompt templates
+- [x] **5.4.4** Integrate company context into prompt templates
   - When company is set: inject values, evaluation criteria, and tips into system prompt
-- [ ] **5.4.5** Allow user to add custom company data in Settings
-- [ ] **5.4.6** Test: Set target company to "Amazon" → behavioral question → verify LP alignment in answer
+- [x] **5.4.5** Allow user to add custom company data in Settings
+- [x] **5.4.6** Test: Set target company to "Amazon" → behavioral question → verify LP alignment in answer
 
 ---
 
