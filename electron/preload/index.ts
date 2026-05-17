@@ -23,6 +23,7 @@ const IPC_CHANNELS = {
     SESSION_DELETE: 'session:delete',
     PROFILE_SAVE: 'profile:save',
     PROFILE_LOAD: 'profile:load',
+    CHECK_STT_SERVER: 'server:check-stt',
 } as const;
 
 // Expose protected methods to renderer process
@@ -141,6 +142,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     getAvailableModels: async () => {
         return await ipcRenderer.invoke(IPC_CHANNELS.GET_AVAILABLE_MODELS);
+    },
+    
+    checkSttServer: async (engine: 'whisper' | 'moonshine') => {
+        return await ipcRenderer.invoke(IPC_CHANNELS.CHECK_STT_SERVER, engine);
     },
     
     testOllama: async () => {

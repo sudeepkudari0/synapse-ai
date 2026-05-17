@@ -12,6 +12,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [activeTab, setActiveTab] = useState<'profile' | 'models' | 'api' | 'stories'>('profile');
     const [models, setModels] = useState<string[]>([]);
     const [settings, setSettings] = useState({
+        sttEngine: 'moonshine' as 'whisper' | 'moonshine',
         whisperModel: 'small.en',
         geminiApiKey: '',
         groqApiKey: '',
@@ -30,6 +31,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [downloadError, setDownloadError] = useState<string | null>(null);
     const [selectedDownload, setSelectedDownload] = useState('base.en');
+    const [serverStatus, setServerStatus] = useState<{ exists: boolean; error?: string } | null>(null);
 
     const downloadableModels = ['tiny.en', 'base.en', 'small.en', 'medium.en'];
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,6 +58,10 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         };
     }, [settings]);
 
+    useEffect(() => {
+        window.electronAPI.checkSttServer(settings.sttEngine).then(res => setServerStatus(res));
+    }, [settings.sttEngine]);
+
     const loadData = async () => {
         try {
             const modelsRes = await window.electronAPI.getAvailableModels();
@@ -66,6 +72,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             const settingsRes = await window.electronAPI.getSettings();
             if (settingsRes.success && settingsRes.settings) {
                 setSettings({
+                    sttEngine: settingsRes.settings.sttEngine || 'moonshine',
                     whisperModel: settingsRes.settings.whisperModel || 'small.en',
                     geminiApiKey: settingsRes.settings.geminiApiKey || '',
                     groqApiKey: settingsRes.settings.groqApiKey || '',
@@ -282,69 +289,95 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-zinc-300 mb-1">
-                                    Active Whisper Model
+                                    Speech-to-Text Engine
                                 </label>
                                 <select
-                                    value={settings.whisperModel}
-                                    onChange={(e) => setSettings({ ...settings, whisperModel: e.target.value })}
+                                    value={settings.sttEngine}
+                                    onChange={(e) => setSettings({ ...settings, sttEngine: e.target.value as 'whisper' | 'moonshine' })}
                                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
-                                    {models.length === 0 ? (
-                                        <option value={settings.whisperModel}>{settings.whisperModel} (Not found)</option>
-                                    ) : (
-                                        models.map(model => (
-                                            <option key={model} value={model}>
-                                                {model}
-                                            </option>
-                                        ))
-                                    )}
+                                    <option value="moonshine">Moonshine v2 (Fast Streaming - Recommended)</option>
+                                    <option value="whisper">Whisper.cpp (Legacy C++)</option>
                                 </select>
-                                <p className="mt-2 text-xs text-zinc-500">
-                                    Select the installed transcription model to use.
-                                </p>
-                            </div>
-                            
-                            <div className="pt-4 border-t border-zinc-800">
-                                <label className="block text-sm font-medium text-zinc-300 mb-1">
-                                    Download New Model
-                                </label>
-                                <div className="flex gap-2 mb-2">
-                                    <select
-                                        value={selectedDownload}
-                                        onChange={(e) => setSelectedDownload(e.target.value)}
-                                        disabled={downloadingModel !== null}
-                                        className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                                    >
-                                        {downloadableModels.map(m => (
-                                            <option key={m} value={m}>{m}</option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={handleDownloadModel}
-                                        disabled={downloadingModel !== null || models.includes(selectedDownload)}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                                    >
-                                        {models.includes(selectedDownload) ? 'Installed' : 'Download'}
-                                    </button>
-                                </div>
-                                {downloadingModel && (
-                                    <div className="mt-2">
-                                        <div className="flex justify-between text-xs text-zinc-400 mb-1">
-                                            <span>Downloading {downloadingModel}...</span>
-                                            <span>{downloadProgress}%</span>
-                                        </div>
-                                        <div className="w-full bg-zinc-800 rounded-full h-1.5">
-                                            <div 
-                                                className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
-                                                style={{ width: `${downloadProgress}%` }}
-                                            />
-                                        </div>
+                                {serverStatus && !serverStatus.exists && (
+                                    <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-md">
+                                        <p className="text-xs text-red-400 font-semibold mb-1">Server Executable Not Found!</p>
+                                        <p className="text-[10px] text-zinc-400">
+                                            Please run <code className="text-zinc-300 bg-zinc-800 px-1 rounded">{settings.sttEngine === 'moonshine' ? '.\\scripts\\build-moonshine.ps1' : '.\\scripts\\setup-whisper.ps1'}</code> in your terminal to compile the sidecar.
+                                        </p>
                                     </div>
                                 )}
-                                {downloadError && (
-                                    <p className="mt-2 text-xs text-red-400">{downloadError}</p>
-                                )}
                             </div>
+
+                            {settings.sttEngine === 'whisper' && (
+                                <>
+                                    <div className="pt-4 border-t border-zinc-800">
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                            Active Whisper Model
+                                        </label>
+                                        <select
+                                            value={settings.whisperModel}
+                                            onChange={(e) => setSettings({ ...settings, whisperModel: e.target.value })}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            {models.length === 0 ? (
+                                                <option value={settings.whisperModel}>{settings.whisperModel} (Not found)</option>
+                                            ) : (
+                                                models.map(model => (
+                                                    <option key={model} value={model}>
+                                                        {model}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                        <p className="mt-2 text-xs text-zinc-500">
+                                            Select the installed transcription model to use.
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="pt-4 border-t border-zinc-800">
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                            Download New Model
+                                        </label>
+                                        <div className="flex gap-2 mb-2">
+                                            <select
+                                                value={selectedDownload}
+                                                onChange={(e) => setSelectedDownload(e.target.value)}
+                                                disabled={downloadingModel !== null}
+                                                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                            >
+                                                {downloadableModels.map(m => (
+                                                    <option key={m} value={m}>{m}</option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={handleDownloadModel}
+                                                disabled={downloadingModel !== null || models.includes(selectedDownload)}
+                                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                            >
+                                                {models.includes(selectedDownload) ? 'Installed' : 'Download'}
+                                            </button>
+                                        </div>
+                                        {downloadingModel && (
+                                            <div className="mt-2">
+                                                <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                                                    <span>Downloading {downloadingModel}...</span>
+                                                    <span>{downloadProgress}%</span>
+                                                </div>
+                                                <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                                                    <div 
+                                                        className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
+                                                        style={{ width: `${downloadProgress}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                        {downloadError && (
+                                            <p className="mt-2 text-xs text-red-400">{downloadError}</p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-4">

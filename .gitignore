@@ -43,3 +43,10 @@ native/whisper/*
 !native/whisper/models/
 native/whisper/models/*
 !native/whisper/models/.gitkeep
+
+# Moonshine build artifacts
+native/moonshine/venv/
+native/moonshine/build/
+native/moonshine/dist/
+native/moonshine/*.spec
+native/moonshine/__pycache__/

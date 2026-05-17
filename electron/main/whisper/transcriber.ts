@@ -3,6 +3,7 @@ import fs from 'fs';
 import http from 'http';
 import { app } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
+import { getSettings } from '../settings';
 
 const isDebugEnabled = process.env.VITE_ENABLE_DEBUG_LOGS === 'true';
 function debugLog(...args: any[]) {
@@ -81,52 +82,53 @@ export class WhisperTranscriber {
     private serverProcess: ChildProcess | null = null;
     private activeTranscription: Promise<{ text: string, words?: any[] }> | null = null;
     private transcriptionCounter = 0;
+    private sttEngine: 'whisper' | 'moonshine' = 'moonshine';
 
     async initialize(modelName: string = 'small.en'): Promise<void> {
-        // Already initialized with same model — skip.
-        if (this.isInitialized && this.modelName === modelName && this.serverProcess) {
-            debugLog(`Whisper server already running (${this.modelName})`);
+        const currentEngine = getSettings().sttEngine || 'moonshine';
+
+        // Already initialized with same model & engine — skip.
+        if (this.isInitialized && this.modelName === modelName && this.sttEngine === currentEngine && this.serverProcess) {
+            debugLog(`STT server already running (${currentEngine} - ${this.modelName})`);
             return;
         }
 
-        // If switching models, tear down old server first.
-        if (this.serverProcess && this.modelName !== modelName) {
+        // If switching models or engine, tear down old server first.
+        if (this.serverProcess && (this.modelName !== modelName || this.sttEngine !== currentEngine)) {
             await this.dispose();
         }
 
         this.modelName = modelName;
-        const basePath = resolveWhisperBasePath();
-        this.serverExePath = path.join(basePath, 'whisper-server.exe');
+        this.sttEngine = currentEngine;
         
-        // Try userData first
-        const userDataModelPath = path.join(app.getPath('userData'), 'whisper-models', `ggml-${modelName}.bin`);
-        if (fs.existsSync(userDataModelPath)) {
-            this.modelPath = userDataModelPath;
+        const basePath = resolveWhisperBasePath();
+        const exeName = this.sttEngine === 'moonshine' ? 'moonshine-server.exe' : 'whisper-server.exe';
+        this.serverExePath = path.join(basePath, exeName);
+        
+        if (this.sttEngine === 'moonshine') {
+            this.modelPath = 'moonshine-streaming-medium';
         } else {
-            // Fallback to bundled
-            this.modelPath = path.join(basePath, 'models', `ggml-${modelName}.bin`);
+            // Whisper.cpp model validation
+            const modelsDir = path.join(app.getPath('userData'), 'whisper-models');
+            this.modelPath = path.join(modelsDir, `ggml-${modelName}.bin`);
+            
+            if (!fs.existsSync(this.modelPath)) {
+                throw new Error(`Model file not found at ${this.modelPath}. Please download it in settings.`);
+            }
         }
 
         // Validate server binary exists
         if (!fs.existsSync(this.serverExePath)) {
             throw new Error(
-                `whisper-server.exe not found at ${this.serverExePath}. ` +
-                `Copy it from the whisper.cpp CUDA release into native/whisper/.`
-            );
-        }
-
-        // Validate model file exists
-        if (!fs.existsSync(this.modelPath)) {
-            throw new Error(
-                `Model file not found at ${this.modelPath}. ` +
-                `Run: bun run scripts/download-base-model.ps1`
+                `${exeName} not found at ${this.serverExePath}. ` +
+                `Please compile the server first.`
             );
         }
 
         // Start the server and wait for it to become ready
         await this.startServer();
         this.isInitialized = true;
-        serverLog(`Ready — model "${modelName}" loaded on GPU, listening on ${SERVER_HOST}:${SERVER_PORT}`);
+        serverLog(`Ready — engine "${this.sttEngine}", model "${modelName}" loaded, listening on ${SERVER_HOST}:${SERVER_PORT}`);
     }
 
     /**
@@ -136,15 +138,11 @@ export class WhisperTranscriber {
     private async startServer(): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             const args = [
-                '-m', this.modelPath,
-                '-l', 'en',
                 '--host', SERVER_HOST,
                 '--port', SERVER_PORT.toString(),
-                '-t', '4',             // inference threads
-                '-nt',                 // no timestamps in output
             ];
 
-            serverLog(`Starting: whisper-server.exe ${args.join(' ')}`);
+            serverLog(`Starting: moonshine-server.exe ${args.join(' ')}`);
 
             const proc = spawn(this.serverExePath, args, {
                 cwd: path.dirname(this.serverExePath),
@@ -168,7 +166,7 @@ export class WhisperTranscriber {
             proc.on('error', (err) => {
                 serverLog(`Process error: ${err.message}`);
                 this.serverProcess = null;
-                reject(new Error(`Failed to start whisper-server.exe: ${err.message}`));
+                reject(new Error(`Failed to start moonshine-server.exe: ${err.message}`));
             });
 
             proc.on('exit', (code, signal) => {
@@ -186,7 +184,7 @@ export class WhisperTranscriber {
                 if (Date.now() - startTime > SERVER_STARTUP_TIMEOUT_MS) {
                     this.killServer();
                     reject(new Error(
-                        `whisper-server.exe did not become ready within ${SERVER_STARTUP_TIMEOUT_MS / 1000}s. ` +
+                        `moonshine-server.exe did not become ready within ${SERVER_STARTUP_TIMEOUT_MS / 1000}s. ` +
                         `Check that the model file is valid and CUDA is working.`
                     ));
                     return;

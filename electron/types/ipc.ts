@@ -65,6 +65,7 @@ export const IPC_CHANNELS = {
     CAPTURE_AND_ANALYZE: 'screen:capture-and-analyze',
     GET_SETTINGS: 'settings:get',
     UPDATE_SETTINGS: 'settings:update',
+    CHECK_STT_SERVER: 'server:check-stt',
     GET_AVAILABLE_MODELS: 'models:get-available',
     TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',

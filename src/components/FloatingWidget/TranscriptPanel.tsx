@@ -23,7 +23,7 @@ export function TranscriptPanel({ conversation, onClear }: TranscriptPanelProps)
             <div className="panel-section">
                 <div className="px-4 py-6 text-center">
                     <p className="text-[var(--text-muted)] text-xs">
-                        Start recording to see live transcription...
+                        Live Transcription...
                     </p>
                 </div>
             </div>

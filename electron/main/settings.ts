@@ -4,6 +4,7 @@ import { app } from 'electron';
 
 export interface AppSettings {
     version: number;
+    sttEngine: 'whisper' | 'moonshine';
     whisperModel: string;
     geminiApiKey: string;
     groqApiKey: string;
@@ -18,10 +19,11 @@ export interface AppSettings {
     isESLMode: boolean;
 }
 
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
+    sttEngine: 'moonshine',
     whisperModel: 'small.en',
     geminiApiKey: '',
     groqApiKey: '',
@@ -63,6 +65,14 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             interviewLanguage: 'en',
             isESLMode: false,
             version: 4,
+        };
+    },
+    4: (settings: any) => {
+        // v4 -> v5: Add sttEngine
+        return {
+            ...settings,
+            sttEngine: 'moonshine',
+            version: 5,
         };
     },
 };
