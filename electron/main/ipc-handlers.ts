@@ -84,18 +84,27 @@ export function registerIPCHandlers(): void {
     });
 
     // Transcribe audio
-    ipcMain.handle(IPC_CHANNELS.WHISPER_TRANSCRIBE, async (event, audioData: number[]) => {
+    ipcMain.handle(IPC_CHANNELS.WHISPER_TRANSCRIBE, async (event, params: any) => {
         try {
             const transcriber = getTranscriber();
 
-            // Convert number array back to Float32Array
-            const float32Audio = new Float32Array(audioData);
+            // Handle both new format { audioData, prompt } and old format [number, number, ...]
+            const audioDataArray = Array.isArray(params) ? params : params.audioData;
+            const promptStr = Array.isArray(params) ? undefined : params.prompt;
 
-            const text = await transcriber.transcribe(float32Audio);
+            if (!audioDataArray) {
+                throw new Error('No audio data provided');
+            }
+
+            // Convert number array back to Float32Array
+            const float32Audio = new Float32Array(audioDataArray);
+
+            const result = await transcriber.transcribe(float32Audio, promptStr);
 
             return {
                 success: true,
-                text: text.trim(),
+                text: result.text.trim(),
+                words: result.words,
             };
         } catch (error) {
             console.error('IPC: Transcription failed:', error);

@@ -10,7 +10,8 @@ import { isQuestionSync } from './lib/question-detector';
 import { predictFollowUps } from './lib/follow-up-predictor';
 import { analyzeDelivery } from './lib/delivery-analyzer';
 import { getCodeAnalysisPrompt } from './lib/prompts/templates/code-analysis';
-import { TranscriptStabilizer } from './lib/transcript-stabilizer';
+import { TimestampDeduplicator } from './lib/timestamp-deduplicator';
+import { filterHallucinations } from './lib/hallucination-filter';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
 
@@ -34,8 +35,8 @@ function App(): JSX.Element {
     // ─── Refs (not state — no re-render needed) ───
     const transcriptionQueueRef = useRef<{source: SpeakerSource, chunk: Float32Array}[]>([]);
     const isTranscribingRef = useRef(false);
-    const userStabilizerRef = useRef(new TranscriptStabilizer());
-    const interviewerStabilizerRef = useRef(new TranscriptStabilizer());
+    const userStabilizerRef = useRef(new TimestampDeduplicator());
+    const interviewerStabilizerRef = useRef(new TimestampDeduplicator());
     const conversationRef = useRef<ChatBlock[]>([]);
     const autoGenerateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -111,8 +112,22 @@ function App(): JSX.Element {
                 if (!nextItem) continue;
 
                 try {
-                    const result = await transcribe(nextItem.chunk);
-                    if (result && result.trim()) {
+                    // Prefix conditioning: last 32 words from the SAME speaker
+                    const lastSpeakerBlocks = conversationRef.current
+                        .filter(b => b.speaker === nextItem.source)
+                        .slice(-3);
+                    const promptText = lastSpeakerBlocks.map(b => b.text).join(' ').split(/\s+/).slice(-32).join(' ');
+
+                    const result = await transcribe(nextItem.chunk, promptText);
+
+                    if (result && result.text.trim()) {
+                        const filterRes = filterHallucinations(result.text);
+                        if (!filterRes.valid) {
+                            console.log(`[HallucinationFilter] Discarded: "${result.text}" (Reason: ${filterRes.reason})`);
+                            continue;
+                        }
+
+                        const text = filterRes.filteredText || result.text;
                         const stabilizer = nextItem.source === 'user' ? userStabilizerRef.current : interviewerStabilizerRef.current;
 
                         setConversation((prev: ChatBlock[]) => {
@@ -122,7 +137,11 @@ function App(): JSX.Element {
                             let textToSet = '';
                             if (!lastBlock || lastBlock.speaker !== nextItem.source) {
                                 stabilizer.clear();
-                                textToSet = stabilizer.addChunk(result);
+                                if (result.words && result.words.length > 0) {
+                                    textToSet = stabilizer.addUtteranceWithTimestamps(result.words);
+                                } else {
+                                    textToSet = stabilizer.addChunkFallback(text);
+                                }
                                 newConv.push({
                                     id: Date.now().toString() + Math.random().toString(),
                                     speaker: nextItem.source,
@@ -130,7 +149,11 @@ function App(): JSX.Element {
                                     timestamp: new Date()
                                 });
                             } else {
-                                textToSet = stabilizer.addChunk(result);
+                                if (result.words && result.words.length > 0) {
+                                    textToSet = stabilizer.addUtteranceWithTimestamps(result.words);
+                                } else {
+                                    textToSet = stabilizer.addChunkFallback(text);
+                                }
                                 newConv[newConv.length - 1] = { ...lastBlock, text: textToSet };
                             }
 
@@ -146,10 +169,9 @@ function App(): JSX.Element {
                             // window, reset the timer (Whisper is still catching up)
                             if (nextItem.source === 'interviewer' && autoGenerateTimeoutRef.current) {
                                 console.log('[Detection] New interviewer text arrived — resetting confirmation window');
-                                // Save the ref, clear, and restart
                                 clearTimeout(autoGenerateTimeoutRef.current);
                                 autoGenerateTimeoutRef.current = null;
-                                startConfirmationWindow();
+                                startConfirmationWindow(); // Will use the latest conversation text via ref
                             }
 
                             return newConv;
@@ -162,6 +184,7 @@ function App(): JSX.Element {
         } finally {
             isTranscribingRef.current = false;
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isModelLoaded, transcribe, setConversation]);
 
     // ─── Two-phase confirmation window for question detection ───

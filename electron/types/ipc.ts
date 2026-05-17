@@ -6,10 +6,12 @@ export interface WhisperLoadModelParams {
 
 export interface WhisperTranscribeParams {
     audioData: Float32Array;
+    prompt?: string;
 }
 
 export interface WhisperTranscribeResult {
     text: string;
+    words?: { word: string; start: number; end: number }[];
     success: boolean;
     error?: string;
 }

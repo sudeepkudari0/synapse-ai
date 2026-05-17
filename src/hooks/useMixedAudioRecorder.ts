@@ -3,6 +3,7 @@ import { logger } from '../lib/logger';
 import { MicVAD } from '@ricky0123/vad-web';
 import ortWasmThreadedMjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url';
 import ortWasmThreadedWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
+import { hasSignificantEnergy } from '../lib/hallucination-filter';
 
 export type SpeakerSource = 'user' | 'interviewer';
 
@@ -13,38 +14,22 @@ interface UseMixedAudioRecorderReturn {
 }
 
 /**
- * Mixed audio recorder with Silero VAD.
+ * Mixed audio recorder with Silero VAD (Utterance-based).
  *
- * @param onNewChunk - Called when a speech chunk is ready for transcription
+ * @param onNewChunk - Called when a complete utterance is ready for transcription
  * @param onInterviewerUtteranceEnd - Called when the interviewer finishes speaking
- *        (speech-end event). Use this to trigger question detection on the
- *        complete utterance instead of per-chunk.
+ * @param onInterviewerSpeechStart - Called when interviewer starts speaking
  */
 export function useMixedAudioRecorder(
     onNewChunk?: (source: SpeakerSource, chunk: Float32Array) => void,
     onInterviewerUtteranceEnd?: () => void,
     onInterviewerSpeechStart?: () => void
 ): UseMixedAudioRecorderReturn {
-    const LIVE_CHUNK_MS = 3000;
-    const SAMPLE_RATE = 16000;
-    const LIVE_CHUNK_SAMPLES = Math.floor((SAMPLE_RATE * LIVE_CHUNK_MS) / 1000);
-
-    // Overlap: prepend last 1s of previous chunk to avoid word loss at boundaries
-    const OVERLAP_MS = 1000;
-    const OVERLAP_SAMPLES = Math.floor((SAMPLE_RATE * OVERLAP_MS) / 1000);
     const micStreamRef = useRef<MediaStream | null>(null);
     const systemStreamRef = useRef<MediaStream | null>(null);
     
     const micVADRef = useRef<any>(null);
     const systemVADRef = useRef<any>(null);
-
-    const micLiveFramesRef = useRef<Float32Array[]>([]);
-    const micLiveSamplesRef = useRef(0);
-    const micPreviousTailRef = useRef<Float32Array | null>(null);
-
-    const sysLiveFramesRef = useRef<Float32Array[]>([]);
-    const sysLiveSamplesRef = useRef(0);
-    const sysPreviousTailRef = useRef<Float32Array | null>(null);
 
     const onNewChunkRef = useRef(onNewChunk);
     const onInterviewerUtteranceEndRef = useRef(onInterviewerUtteranceEnd);
@@ -61,51 +46,6 @@ export function useMixedAudioRecorder(
     useEffect(() => {
         onInterviewerSpeechStartRef.current = onInterviewerSpeechStart;
     }, [onInterviewerSpeechStart]);
-
-    const createEmitFunction = (
-        source: SpeakerSource,
-        liveFramesRef: React.MutableRefObject<Float32Array[]>,
-        liveSamplesRef: React.MutableRefObject<number>,
-        previousTailRef: React.MutableRefObject<Float32Array | null>
-    ) => {
-        return (force = false) => {
-            const callback = onNewChunkRef.current;
-            if (!callback) return;
-
-            if (!force && liveSamplesRef.current < LIVE_CHUNK_SAMPLES) return;
-            if (liveSamplesRef.current === 0) return;
-
-            const rawChunk = new Float32Array(liveSamplesRef.current);
-            let offset = 0;
-            for (const frame of liveFramesRef.current) {
-                rawChunk.set(frame, offset);
-                offset += frame.length;
-            }
-
-            liveFramesRef.current = [];
-            liveSamplesRef.current = 0;
-
-            let finalChunk: Float32Array;
-            if (previousTailRef.current) {
-                finalChunk = new Float32Array(previousTailRef.current.length + rawChunk.length);
-                finalChunk.set(previousTailRef.current, 0);
-                finalChunk.set(rawChunk, previousTailRef.current.length);
-            } else {
-                finalChunk = rawChunk;
-            }
-
-            if (finalChunk.length > OVERLAP_SAMPLES) {
-                previousTailRef.current = finalChunk.slice(-OVERLAP_SAMPLES);
-            } else {
-                previousTailRef.current = finalChunk.slice();
-            }
-
-            callback(source, finalChunk);
-        };
-    };
-
-    const emitMicChunk = useCallback(createEmitFunction('user', micLiveFramesRef, micLiveSamplesRef, micPreviousTailRef), []);
-    const emitSysChunk = useCallback(createEmitFunction('interviewer', sysLiveFramesRef, sysLiveSamplesRef, sysPreviousTailRef), []);
 
     const startRecording = useCallback(async () => {
         try {
@@ -160,7 +100,7 @@ export function useMixedAudioRecorder(
                 logger.warn('System audio unavailable:', err);
             }
 
-            const createVAD = async (stream: MediaStream, source: SpeakerSource, emitChunk: (force?: boolean) => void) => {
+            const createVAD = async (stream: MediaStream, source: SpeakerSource) => {
                 return await MicVAD.new({
                     baseAssetPath: assetBasePath,
                     onnxWASMBasePath: assetBasePath,
@@ -175,47 +115,29 @@ export function useMixedAudioRecorder(
                         };
                     },
                     model: "v5",
-                    positiveSpeechThreshold: 0.35,
-                    negativeSpeechThreshold: 0.25,
-                    minSpeechMs: 250,
+                    positiveSpeechThreshold: 0.5,
+                    negativeSpeechThreshold: 0.35,
+                    minSpeechMs: 300,
                     preSpeechPadMs: 500,
-                    redemptionMs: 900,
+                    redemptionMs: 600,
                     submitUserSpeechOnPause: true,
                     onSpeechStart: () => {
                         logger.debug(`VAD [${source}]: Speech started detected`);
-                        if (source === 'user') {
-                            micPreviousTailRef.current = null;
-                        } else {
-                            sysPreviousTailRef.current = null;
-                            // ▼ Notify that the interviewer started speaking again
-                            // This resets the detection confirmation window
+                        if (source === 'interviewer') {
                             onInterviewerSpeechStartRef.current?.();
                         }
                     },
-                    onFrameProcessed: (probs: { isSpeech: number }, frame: Float32Array) => {
-                        if (probs.isSpeech >= 0.25) {
-                            if (source === 'user') {
-                                micLiveFramesRef.current.push(frame.slice());
-                                micLiveSamplesRef.current += frame.length;
-                            } else {
-                                sysLiveFramesRef.current.push(frame.slice());
-                                sysLiveSamplesRef.current += frame.length;
-                            }
-                            emitChunk(false);
-                        } else if ((source === 'user' ? micLiveSamplesRef.current : sysLiveSamplesRef.current) > 0) {
-                            emitChunk(true);
-                        }
-                    },
-                    onSpeechEnd: () => {
-                        logger.debug(`VAD [${source}]: Speech ended. Flushing live chunk buffer`);
-                        emitChunk(true);
-
-                        if (source === 'user') {
-                            micPreviousTailRef.current = null;
+                    onSpeechEnd: (audio: Float32Array) => {
+                        logger.debug(`VAD [${source}]: Speech ended. Length: ${(audio.length / 16000).toFixed(1)}s`);
+                        
+                        // Energy-based pre-filter to catch silent/noise frames that VAD might have misclassified
+                        if (hasSignificantEnergy(audio)) {
+                            onNewChunkRef.current?.(source, audio);
                         } else {
-                            sysPreviousTailRef.current = null;
-                            // ▼ KEY: Notify that the interviewer finished speaking
-                            // This triggers question detection on the complete utterance
+                            logger.debug(`VAD [${source}]: Discarding utterance due to low energy`);
+                        }
+
+                        if (source === 'interviewer') {
                             onInterviewerUtteranceEndRef.current?.();
                         }
                     },
@@ -228,12 +150,12 @@ export function useMixedAudioRecorder(
             logger.info('Initializing Silero VADs...');
             
             if (micStreamRef.current) {
-                micVADRef.current = await createVAD(micStreamRef.current, 'user', emitMicChunk);
+                micVADRef.current = await createVAD(micStreamRef.current, 'user');
                 micVADRef.current.start();
             }
             
             if (systemStreamRef.current && systemStreamRef.current.getAudioTracks().length > 0) {
-                systemVADRef.current = await createVAD(systemStreamRef.current, 'interviewer', emitSysChunk);
+                systemVADRef.current = await createVAD(systemStreamRef.current, 'interviewer');
                 systemVADRef.current.start();
             }
 
@@ -241,11 +163,11 @@ export function useMixedAudioRecorder(
             logger.error('Failed to start recording:', error);
             throw error;
         }
-    }, [emitMicChunk, emitSysChunk]);
+    }, []);
 
     const stopRecording = useCallback(() => {
         if (micVADRef.current) {
-            micVADRef.current.pause();
+            micVADRef.current.pause(); // Setting submitUserSpeechOnPause to true ensures pending audio is processed
             micVADRef.current.destroy();
             micVADRef.current = null;
         }
@@ -255,17 +177,6 @@ export function useMixedAudioRecorder(
             systemVADRef.current = null;
         }
         
-        emitMicChunk(true);
-        emitSysChunk(true);
-        
-        micLiveFramesRef.current = [];
-        micLiveSamplesRef.current = 0;
-        micPreviousTailRef.current = null;
-
-        sysLiveFramesRef.current = [];
-        sysLiveSamplesRef.current = 0;
-        sysPreviousTailRef.current = null;
-
         if (micStreamRef.current) {
             micStreamRef.current.getTracks().forEach((track) => track.stop());
             micStreamRef.current = null;
@@ -275,7 +186,7 @@ export function useMixedAudioRecorder(
             systemStreamRef.current = null;
         }
 
-    }, [emitMicChunk, emitSysChunk]);
+    }, []);
 
     const clearChunks = useCallback(() => {}, []);
 

@@ -5,7 +5,7 @@ interface UseWhisperReturn {
     isModelLoading: boolean;
     isModelLoaded: boolean;
     modelError: string;
-    transcribe: (audioData: Float32Array) => Promise<string>;
+    transcribe: (audioData: Float32Array, prompt?: string) => Promise<{ text: string, words?: any[] }>;
     loadModel: (forceReload?: boolean) => Promise<void>;
 }
 
@@ -56,7 +56,7 @@ export function useWhisper(): UseWhisperReturn {
     }, [isModelLoaded]);
 
     const transcribe = useCallback(
-        async (audioData: Float32Array): Promise<string> => {
+        async (audioData: Float32Array, prompt?: string): Promise<{ text: string, words?: any[] }> => {
             if (!isModelLoaded) {
                 throw new Error('Model not loaded. Call loadModel() first.');
             }
@@ -64,17 +64,17 @@ export function useWhisper(): UseWhisperReturn {
             try {
                 if (audioData.length === 0) {
                     logger.warn('Empty audio data sent to transcribe');
-                    return '';
+                    return { text: '' };
                 }
                 logger.debug(`Sending ${audioData.length} samples to IPC transcriber...`);
                 const startTime = performance.now();
-                const result = await window.electronAPI.whisper.transcribe(audioData);
+                const result = await window.electronAPI.whisper.transcribe(audioData, prompt);
                 const endTime = performance.now();
 
                 logger.debug(`Transcription response received in ${(endTime - startTime).toFixed(0)}ms: success=${result.success}`);
                 if (result.success) {
                     logger.info(`Transcribed text: "${result.text}"`);
-                    return result.text;
+                    return { text: result.text, words: result.words };
                 } else {
                     throw new Error(result.error || 'Transcription failed');
                 }

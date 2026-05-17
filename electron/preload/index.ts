@@ -50,10 +50,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
             return await ipcRenderer.invoke(IPC_CHANNELS.WHISPER_LOAD_MODEL, modelName);
         },
 
-        transcribe: async (audioData: Float32Array) => {
+        transcribe: async (audioData: Float32Array, prompt?: string) => {
             // Convert Float32Array to regular array for IPC transfer
             const dataArray = Array.from(audioData);
-            return await ipcRenderer.invoke(IPC_CHANNELS.WHISPER_TRANSCRIBE, dataArray);
+            return await ipcRenderer.invoke(IPC_CHANNELS.WHISPER_TRANSCRIBE, { audioData: dataArray, prompt });
         },
 
         getStatus: async () => {

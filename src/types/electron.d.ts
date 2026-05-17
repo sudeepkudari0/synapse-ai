@@ -2,9 +2,10 @@
 
 interface WhisperAPI {
     loadModel: (modelName?: string) => Promise<{ success: boolean; error?: string }>;
-    transcribe: (audioData: Float32Array) => Promise<{
+    transcribe: (audioData: Float32Array, prompt?: string) => Promise<{
         success: boolean;
         text: string;
+        words?: { word: string; start: number; end: number }[];
         error?: string;
     }>;
     getStatus: () => Promise<{

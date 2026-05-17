@@ -79,7 +79,7 @@ export class WhisperTranscriber {
     private modelPath = '';
     private isInitialized = false;
     private serverProcess: ChildProcess | null = null;
-    private activeTranscription: Promise<string> | null = null;
+    private activeTranscription: Promise<{ text: string, words?: any[] }> | null = null;
     private transcriptionCounter = 0;
 
     async initialize(modelName: string = 'small.en'): Promise<void> {
@@ -220,20 +220,20 @@ export class WhisperTranscriber {
         });
     }
 
-    async transcribe(audioData: Float32Array): Promise<string> {
+    async transcribe(audioData: Float32Array, prompt?: string): Promise<{ text: string, words?: any[] }> {
         if (!this.isInitialized || !this.serverProcess) {
             throw new Error('Whisper server not running. Call initialize() first.');
         }
 
         if (audioData.length === 0) {
-            return '';
+            return { text: '' };
         }
 
         // Serialize inference calls — one at a time to avoid overwhelming the server.
-        const previous = this.activeTranscription ?? Promise.resolve('');
+        const previous = this.activeTranscription ?? Promise.resolve({ text: '' });
         const current = previous
-            .catch(() => '')
-            .then(() => this.sendToServer(audioData));
+            .catch(() => ({ text: '' }))
+            .then(() => this.sendToServer(audioData, prompt));
 
         this.activeTranscription = current;
         return current;
@@ -243,7 +243,7 @@ export class WhisperTranscriber {
      * Send audio to the whisper-server via HTTP POST multipart/form-data
      * to the /inference endpoint and return the transcribed text.
      */
-    private async sendToServer(audioData: Float32Array): Promise<string> {
+    private async sendToServer(audioData: Float32Array, prompt?: string): Promise<{ text: string, words?: any[] }> {
         const id = ++this.transcriptionCounter;
         const startTime = Date.now();
 
@@ -267,8 +267,17 @@ export class WhisperTranscriber {
         parts.push(Buffer.from(
             `--${boundary}\r\n` +
             `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
-            `json\r\n`
+            `verbose_json\r\n`
         ));
+
+        // Initial prompt field for prefix conditioning
+        if (prompt) {
+            parts.push(Buffer.from(
+                `--${boundary}\r\n` +
+                `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
+                `${prompt}\r\n`
+            ));
+        }
 
         // Language field
         parts.push(Buffer.from(
@@ -291,7 +300,7 @@ export class WhisperTranscriber {
 
         debugLog(`[Whisper #${id}] sending ${(wavBuffer.length / 1024).toFixed(1)} KB WAV to server...`);
 
-        const text = await new Promise<string>((resolve, reject) => {
+        const result = await new Promise<{ text: string, words?: any[] }>((resolve, reject) => {
             const req = http.request(
                 {
                     hostname: SERVER_HOST,
@@ -310,12 +319,26 @@ export class WhisperTranscriber {
                     res.on('end', () => {
                         try {
                             const json = JSON.parse(data);
-                            // whisper-server returns { "text": "..." } in JSON mode
-                            const result = (json.text ?? '').trim();
-                            resolve(result);
+                            const text = (json.text ?? '').trim();
+                            let words: any[] = [];
+                            
+                            if (json.segments && Array.isArray(json.segments)) {
+                                for (const segment of json.segments) {
+                                    const tokens = segment.words || segment.tokens || [];
+                                    for (const token of tokens) {
+                                        words.push({
+                                            word: (token.word || token.text || '').trim(),
+                                            start: token.start,
+                                            end: token.end
+                                        });
+                                    }
+                                }
+                            }
+                            
+                            resolve({ text, words: words.length > 0 ? words : undefined });
                         } catch {
                             // If not JSON, try to use raw text
-                            resolve(data.trim());
+                            resolve({ text: data.trim() });
                         }
                     });
                 }
@@ -338,10 +361,10 @@ export class WhisperTranscriber {
         const durationMs = (audioData.length / 16000) * 1000;
         debugLog(
             `[Whisper #${id}] transcribed in ${elapsed}ms ` +
-            `(audio: ${Math.round(durationMs)}ms, RTF: ${(elapsed / durationMs).toFixed(2)}): "${text}"`
+            `(audio: ${Math.round(durationMs)}ms, RTF: ${(elapsed / durationMs).toFixed(2)}): "${result.text}"`
         );
 
-        return text;
+        return result;
     }
 
     getStatus() {
