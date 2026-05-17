@@ -19,6 +19,14 @@ export const RegionSelector: React.FC<RegionSelectorProps> = ({ onCapture, onCan
     const [selection, setSelection] = useState<SelectionRect | null>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
 
+    // Disable click-through while region selector is active (full-screen overlay)
+    useEffect(() => {
+        window.electronAPI?.setIgnoreMouseEvents(false);
+        return () => {
+            window.electronAPI?.setIgnoreMouseEvents(true);
+        };
+    }, []);
+
     // Load the screenshot into memory
     useEffect(() => {
         const img = new Image();

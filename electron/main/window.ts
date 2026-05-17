@@ -1,28 +1,22 @@
 import { BrowserWindow, app, screen } from 'electron';
 import path from 'path';
 
-// Fixed widget dimensions — window never resizes.
-// Content visibility is controlled by CSS, not Electron setBounds().
-const WIDGET_WIDTH = 420;
-const WIDGET_HEIGHT = 600;
+// Full-screen transparent overlay — widget sizing is CSS-driven in the renderer.
+// This allows dynamic content height and proper full-screen region capture.
 
 // In CommonJS, __dirname is available natively
 declare const __dirname: string;
 
 export function createMainWindow(): BrowserWindow {
-    // Get primary display dimensions — position top-right
+    // Cover the entire work area so the widget can grow dynamically
     const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: screenWidth } = primaryDisplay.workAreaSize;
-
-    // Position: top-right corner with some margin
-    const posX = screenWidth - WIDGET_WIDTH - 24;
-    const posY = 24;
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
     const mainWindow = new BrowserWindow({
-        width: WIDGET_WIDTH,
-        height: WIDGET_HEIGHT,
-        x: posX,
-        y: posY,
+        width: screenWidth,
+        height: screenHeight,
+        x: 0,
+        y: 0,
         frame: false,
         transparent: true,
         alwaysOnTop: true,

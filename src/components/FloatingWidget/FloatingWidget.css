@@ -6,6 +6,7 @@
 
 .widget {
     position: fixed;
+    /* top / right are set via inline styles for drag support */
     top: 16px;
     right: 16px;
     width: var(--widget-width);
@@ -19,6 +20,9 @@
     transition: max-height var(--duration-slow) var(--ease-out),
                 box-shadow var(--duration-normal) var(--ease-out);
     will-change: max-height;
+    /* Flex column so widget-body fills remaining space */
+    display: flex;
+    flex-direction: column;
 }
 
 .widget:hover {
@@ -33,7 +37,8 @@
 }
 
 .widget--expanded {
-    max-height: 560px;
+    /* Dynamic: grows with content, capped at 85% of viewport height */
+    max-height: 85vh;
 }
 
 /* ─── Widget Body (expandable content area) ─── */
@@ -44,6 +49,10 @@
     transition: opacity var(--duration-normal) var(--ease-out),
                 transform var(--duration-normal) var(--ease-out);
     pointer-events: none;
+    /* Fill remaining widget space and scroll when needed */
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .widget--expanded .widget-body {
@@ -58,6 +67,7 @@
 .widget-header {
     border-bottom: 1px solid transparent;
     transition: border-color var(--duration-fast) var(--ease-out);
+    flex-shrink: 0;
 }
 
 .widget--expanded .widget-header {

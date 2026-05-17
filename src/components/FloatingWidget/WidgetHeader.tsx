@@ -20,6 +20,7 @@ interface WidgetHeaderProps {
     onToggleChat: () => void;
     onToggleHistory: () => void;
     onTogglePractice: () => void;
+    onDrag: (deltaX: number, deltaY: number) => void;
     onClose: () => void;
 }
 
@@ -39,9 +40,10 @@ export function WidgetHeader({
     onToggleChat,
     onToggleHistory,
     onTogglePractice,
+    onDrag,
     onClose,
 }: WidgetHeaderProps) {
-    const { onMouseDown } = useDrag();
+    const { onMouseDown } = useDrag(onDrag);
     const { isCodeMode, toggleCodeMode } = useUIStore();
 
     const formatTime = (seconds: number): string => {

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
 import { AnswerPanel } from './AnswerPanel';
@@ -79,6 +79,16 @@ export function FloatingWidget({
     const prevAnswerCount = useRef(answers.length);
     const [selectedSession, setSelectedSession] = useState<any>(null);
 
+    // ─── Widget CSS position (for drag) ───
+    const [widgetPos, setWidgetPos] = useState({ top: 16, right: 16 });
+
+    const handleDrag = useCallback((deltaX: number, deltaY: number) => {
+        setWidgetPos(prev => ({
+            top: Math.max(0, prev.top + deltaY),
+            right: Math.max(0, prev.right - deltaX),
+        }));
+    }, []);
+
     // Reset selected session when history is toggled
     useEffect(() => {
         if (!isHistoryOpen) {
@@ -137,6 +147,7 @@ export function FloatingWidget({
                 ref={widgetRef}
                 className={`widget pointer-events-auto ${isExpanded ? 'widget--expanded' : 'widget--collapsed'}`}
                 id="floating-widget"
+                style={{ top: `${widgetPos.top}px`, right: `${widgetPos.right}px` }}
             >
                 {/* Header — always visible */}
                 <WidgetHeader
@@ -155,6 +166,7 @@ export function FloatingWidget({
                     onToggleChat={onToggleChat}
                     onToggleHistory={onToggleHistory}
                     onTogglePractice={onTogglePractice}
+                    onDrag={handleDrag}
                     onClose={onClose}
                 />
 

@@ -1,10 +1,11 @@
 import { useRef, useCallback, useEffect } from 'react';
 
 /**
- * Custom hook for dragging the Electron window.
- * Uses IPC moveWindow calls for smooth drag behavior.
+ * Custom hook for dragging the widget within the full-screen overlay.
+ * Instead of moving the Electron window, this calls a callback to update
+ * CSS-based positioning of the widget element.
  */
-export function useDrag() {
+export function useDrag(onDragMove: (deltaX: number, deltaY: number) => void) {
     const isDraggingRef = useRef(false);
     const lastPosRef = useRef({ x: 0, y: 0 });
 
@@ -30,7 +31,7 @@ export function useDrag() {
 
             if (deltaX !== 0 || deltaY !== 0) {
                 lastPosRef.current = { x: e.screenX, y: e.screenY };
-                window.electronAPI?.moveWindow(deltaX, deltaY);
+                onDragMove(deltaX, deltaY);
             }
         };
 
@@ -45,7 +46,7 @@ export function useDrag() {
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
         };
-    }, []);
+    }, [onDragMove]);
 
     return { onMouseDown };
 }
