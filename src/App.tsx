@@ -142,6 +142,16 @@ function App(): JSX.Element {
                                 autoGenerateTimeoutRef.current = null;
                             }
 
+                            // Phase 2: If new interviewer text arrives during confirmation
+                            // window, reset the timer (Whisper is still catching up)
+                            if (nextItem.source === 'interviewer' && autoGenerateTimeoutRef.current) {
+                                console.log('[Detection] New interviewer text arrived — resetting confirmation window');
+                                // Save the ref, clear, and restart
+                                clearTimeout(autoGenerateTimeoutRef.current);
+                                autoGenerateTimeoutRef.current = null;
+                                startConfirmationWindow();
+                            }
+
                             return newConv;
                         });
                     }
@@ -154,21 +164,27 @@ function App(): JSX.Element {
         }
     }, [isModelLoaded, transcribe, setConversation]);
 
-    // ─── Speech-end triggered question detection ───
-    // This fires when the interviewer's VAD detects silence (complete utterance).
-    // We debounce 2s to let transcription finalize, then run multi-signal detection.
-    const handleInterviewerSpeechEnd = useCallback(() => {
-        // Cancel any previous pending detection
-        if (autoGenerateTimeoutRef.current) {
-            clearTimeout(autoGenerateTimeoutRef.current);
-        }
+    // ─── Two-phase confirmation window for question detection ───
+    //
+    // The problem: VAD fires onSpeechEnd on brief pauses (breaths), but the
+    // interviewer may still be mid-sentence. If we detect immediately, we get
+    // partial questions like "Can you explain?" instead of the full
+    // "Can you explain closures in Java with code example?"
+    //
+    // Solution: Confirmation window
+    // Phase 1: onSpeechEnd fires → start a 3.5s timer
+    // Phase 2: If interviewer speaks again OR new transcript text arrives → reset timer
+    //          If 3.5s passes with no activity → run detection on full text
 
+    const CONFIRMATION_WINDOW_MS = 3500;
+
+    const startConfirmationWindow = useCallback(() => {
         // 10s cooldown between auto-answers
-        const now = Date.now();
-        if (now - lastAnswerTimeRef.current < 10000) return;
+        if (Date.now() - lastAnswerTimeRef.current < 10000) return;
 
-        // Wait 2s for transcription to finalize the utterance
         autoGenerateTimeoutRef.current = setTimeout(async () => {
+            autoGenerateTimeoutRef.current = null;
+
             // Check settings — skip in manual mode
             const settingsRes = await window.electronAPI.getSettings();
             const mode = settingsRes.success && settingsRes.settings
@@ -185,7 +201,7 @@ function App(): JSX.Element {
             const detection = isQuestionSync(lastInterviewerBlock.text);
 
             console.log(
-                `[Detection] "${lastInterviewerBlock.text.slice(0, 60)}..." => ` +
+                `[Detection] "${lastInterviewerBlock.text.slice(0, 80)}..." => ` +
                 `isQuestion=${detection.isQuestion}, confidence=${detection.confidence.toFixed(2)}, ` +
                 `signals=[${detection.signals.join(', ')}]`
             );
@@ -194,7 +210,29 @@ function App(): JSX.Element {
                 lastAnswerTimeRef.current = Date.now();
                 triggerAutoAnswer();
             }
-        }, 2000);
+        }, CONFIRMATION_WINDOW_MS);
+    }, []);
+
+    // Called when interviewer's VAD detects speech-end (silence after speaking)
+    const handleInterviewerSpeechEnd = useCallback(() => {
+        console.log('[Detection] Interviewer speech ended — starting confirmation window');
+
+        // Cancel any previous pending window
+        if (autoGenerateTimeoutRef.current) {
+            clearTimeout(autoGenerateTimeoutRef.current);
+            autoGenerateTimeoutRef.current = null;
+        }
+
+        startConfirmationWindow();
+    }, [startConfirmationWindow]);
+
+    // Called when interviewer's VAD detects speech-start (they resumed speaking)
+    const handleInterviewerSpeechStart = useCallback(() => {
+        if (autoGenerateTimeoutRef.current) {
+            console.log('[Detection] Interviewer resumed speaking — cancelling confirmation window');
+            clearTimeout(autoGenerateTimeoutRef.current);
+            autoGenerateTimeoutRef.current = null;
+        }
     }, []);
 
     const handleAudioChunk = useCallback(async (source: SpeakerSource, pcmSamples: Float32Array) => {
@@ -205,7 +243,8 @@ function App(): JSX.Element {
 
     const { startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(
         handleAudioChunk,
-        handleInterviewerSpeechEnd
+        handleInterviewerSpeechEnd,
+        handleInterviewerSpeechStart
     );
 
     // ─── Action handlers ───

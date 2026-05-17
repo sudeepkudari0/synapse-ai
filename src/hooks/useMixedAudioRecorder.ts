@@ -22,7 +22,8 @@ interface UseMixedAudioRecorderReturn {
  */
 export function useMixedAudioRecorder(
     onNewChunk?: (source: SpeakerSource, chunk: Float32Array) => void,
-    onInterviewerUtteranceEnd?: () => void
+    onInterviewerUtteranceEnd?: () => void,
+    onInterviewerSpeechStart?: () => void
 ): UseMixedAudioRecorderReturn {
     const LIVE_CHUNK_MS = 3000;
     const SAMPLE_RATE = 16000;
@@ -47,6 +48,7 @@ export function useMixedAudioRecorder(
 
     const onNewChunkRef = useRef(onNewChunk);
     const onInterviewerUtteranceEndRef = useRef(onInterviewerUtteranceEnd);
+    const onInterviewerSpeechStartRef = useRef(onInterviewerSpeechStart);
     
     useEffect(() => {
         onNewChunkRef.current = onNewChunk;
@@ -55,6 +57,10 @@ export function useMixedAudioRecorder(
     useEffect(() => {
         onInterviewerUtteranceEndRef.current = onInterviewerUtteranceEnd;
     }, [onInterviewerUtteranceEnd]);
+
+    useEffect(() => {
+        onInterviewerSpeechStartRef.current = onInterviewerSpeechStart;
+    }, [onInterviewerSpeechStart]);
 
     const createEmitFunction = (
         source: SpeakerSource,
@@ -181,6 +187,9 @@ export function useMixedAudioRecorder(
                             micPreviousTailRef.current = null;
                         } else {
                             sysPreviousTailRef.current = null;
+                            // ▼ Notify that the interviewer started speaking again
+                            // This resets the detection confirmation window
+                            onInterviewerSpeechStartRef.current?.();
                         }
                     },
                     onFrameProcessed: (probs: { isSpeech: number }, frame: Float32Array) => {
