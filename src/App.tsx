@@ -6,7 +6,7 @@ import { useMixedAudioRecorder, SpeakerSource } from './hooks/useMixedAudioRecor
 import { useLLM } from './hooks/useLLM';
 import { useProfile } from './hooks/useProfile';
 import { classifyQuestion } from './lib/interview-classifier';
-import { isQuestion } from './lib/question-detector';
+import { isQuestionSync } from './lib/question-detector';
 import { predictFollowUps } from './lib/follow-up-predictor';
 import { analyzeDelivery } from './lib/delivery-analyzer';
 import { getCodeAnalysisPrompt } from './lib/prompts/templates/code-analysis';
@@ -136,39 +136,10 @@ function App(): JSX.Element {
 
                             conversationRef.current = newConv;
 
-                            // -- AUTO ANSWER LOGIC --
-                            const currentLastBlock = newConv[newConv.length - 1];
-                            if (currentLastBlock.speaker === 'interviewer') {
-                                if (autoGenerateTimeoutRef.current) {
-                                    clearTimeout(autoGenerateTimeoutRef.current);
-                                }
-
-                                // 10s cooldown to prevent spamming answers
-                                const now = Date.now();
-                                if (now - lastAnswerTimeRef.current > 10000) {
-                                    autoGenerateTimeoutRef.current = setTimeout(async () => {
-                                        // Fetch current settings for detection mode
-                                        const settingsRes = await window.electronAPI.getSettings();
-                                        const mode = settingsRes.success && settingsRes.settings ? settingsRes.settings.questionDetectionMode : 'hybrid';
-                                        
-                                        // Skip auto-detection in manual mode
-                                        if (mode === 'manual') return;
-
-                                        // Run smart detection
-                                        const contextTexts = newConv.slice(0, -1).map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`);
-                                        const result = await isQuestion(currentLastBlock.text, contextTexts, mode as any);
-                                        
-                                        if (result.isQuestion) {
-                                            lastAnswerTimeRef.current = Date.now();
-                                            triggerAutoAnswer();
-                                        }
-                                    }, 1500);
-                                }
-                            } else if (currentLastBlock.speaker === 'user') {
-                                if (autoGenerateTimeoutRef.current) {
-                                    clearTimeout(autoGenerateTimeoutRef.current);
-                                    autoGenerateTimeoutRef.current = null;
-                                }
+                            // If user starts speaking, cancel any pending auto-answer
+                            if (nextItem.source === 'user' && autoGenerateTimeoutRef.current) {
+                                clearTimeout(autoGenerateTimeoutRef.current);
+                                autoGenerateTimeoutRef.current = null;
                             }
 
                             return newConv;
@@ -183,13 +154,59 @@ function App(): JSX.Element {
         }
     }, [isModelLoaded, transcribe, setConversation]);
 
+    // ─── Speech-end triggered question detection ───
+    // This fires when the interviewer's VAD detects silence (complete utterance).
+    // We debounce 2s to let transcription finalize, then run multi-signal detection.
+    const handleInterviewerSpeechEnd = useCallback(() => {
+        // Cancel any previous pending detection
+        if (autoGenerateTimeoutRef.current) {
+            clearTimeout(autoGenerateTimeoutRef.current);
+        }
+
+        // 10s cooldown between auto-answers
+        const now = Date.now();
+        if (now - lastAnswerTimeRef.current < 10000) return;
+
+        // Wait 2s for transcription to finalize the utterance
+        autoGenerateTimeoutRef.current = setTimeout(async () => {
+            // Check settings — skip in manual mode
+            const settingsRes = await window.electronAPI.getSettings();
+            const mode = settingsRes.success && settingsRes.settings
+                ? settingsRes.settings.questionDetectionMode
+                : 'heuristic';
+            if (mode === 'manual') return;
+
+            // Get the last interviewer block from conversation
+            const conv = conversationRef.current;
+            const lastInterviewerBlock = [...conv].reverse().find(b => b.speaker === 'interviewer');
+            if (!lastInterviewerBlock || !lastInterviewerBlock.text.trim()) return;
+
+            // Run multi-signal detection on the complete utterance
+            const detection = isQuestionSync(lastInterviewerBlock.text);
+
+            console.log(
+                `[Detection] "${lastInterviewerBlock.text.slice(0, 60)}..." => ` +
+                `isQuestion=${detection.isQuestion}, confidence=${detection.confidence.toFixed(2)}, ` +
+                `signals=[${detection.signals.join(', ')}]`
+            );
+
+            if (detection.isQuestion) {
+                lastAnswerTimeRef.current = Date.now();
+                triggerAutoAnswer();
+            }
+        }, 2000);
+    }, []);
+
     const handleAudioChunk = useCallback(async (source: SpeakerSource, pcmSamples: Float32Array) => {
         if (!isModelLoaded) return;
         transcriptionQueueRef.current.push({ source, chunk: pcmSamples });
         void processTranscriptionQueue();
     }, [isModelLoaded, processTranscriptionQueue]);
 
-    const { startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(handleAudioChunk);
+    const { startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(
+        handleAudioChunk,
+        handleInterviewerSpeechEnd
+    );
 
     // ─── Action handlers ───
 

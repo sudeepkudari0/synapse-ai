@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { logger } from '../lib/logger';
 import { MicVAD } from '@ricky0123/vad-web';
 import ortWasmThreadedMjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url';
@@ -12,8 +12,17 @@ interface UseMixedAudioRecorderReturn {
     clearChunks: () => void;
 }
 
+/**
+ * Mixed audio recorder with Silero VAD.
+ *
+ * @param onNewChunk - Called when a speech chunk is ready for transcription
+ * @param onInterviewerUtteranceEnd - Called when the interviewer finishes speaking
+ *        (speech-end event). Use this to trigger question detection on the
+ *        complete utterance instead of per-chunk.
+ */
 export function useMixedAudioRecorder(
-    onNewChunk?: (source: SpeakerSource, chunk: Float32Array) => void
+    onNewChunk?: (source: SpeakerSource, chunk: Float32Array) => void,
+    onInterviewerUtteranceEnd?: () => void
 ): UseMixedAudioRecorderReturn {
     const LIVE_CHUNK_MS = 3000;
     const SAMPLE_RATE = 16000;
@@ -37,10 +46,15 @@ export function useMixedAudioRecorder(
     const sysPreviousTailRef = useRef<Float32Array | null>(null);
 
     const onNewChunkRef = useRef(onNewChunk);
+    const onInterviewerUtteranceEndRef = useRef(onInterviewerUtteranceEnd);
     
     useEffect(() => {
         onNewChunkRef.current = onNewChunk;
     }, [onNewChunk]);
+
+    useEffect(() => {
+        onInterviewerUtteranceEndRef.current = onInterviewerUtteranceEnd;
+    }, [onInterviewerUtteranceEnd]);
 
     const createEmitFunction = (
         source: SpeakerSource,
@@ -186,10 +200,14 @@ export function useMixedAudioRecorder(
                     onSpeechEnd: () => {
                         logger.debug(`VAD [${source}]: Speech ended. Flushing live chunk buffer`);
                         emitChunk(true);
+
                         if (source === 'user') {
                             micPreviousTailRef.current = null;
                         } else {
                             sysPreviousTailRef.current = null;
+                            // ▼ KEY: Notify that the interviewer finished speaking
+                            // This triggers question detection on the complete utterance
+                            onInterviewerUtteranceEndRef.current?.();
                         }
                     },
                     onVADMisfire: () => {
