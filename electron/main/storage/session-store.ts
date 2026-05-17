@@ -62,18 +62,28 @@ export const listSessions = (): SessionSummary[] => {
 
     for (const file of files) {
         if (!file.endsWith('.json')) continue;
-        const session = sessionStore.read<SessionData>(file);
+        const session = sessionStore.read<any>(file);
         if (session) {
-            // Count interviewer statements that look like questions as an approximation
-            const questionCount = session.conversation.filter(
-                b => b.speaker === 'interviewer' && b.text.includes('?')
-            ).length;
+            // Support both old schema (timestamp/type) and new (startTime/interviewType)
+            const startTime = session.startTime || session.timestamp || new Date().toISOString();
+            const interviewType = session.interviewType || session.type || 'general';
+
+            // Count questions: use stored questionCount, or count from conversation
+            let questionCount = session.questionCount || 0;
+            if (questionCount === 0 && session.conversation) {
+                questionCount = session.conversation.filter(
+                    (b: any) => b.speaker === 'interviewer' && b.text.includes('?')
+                ).length;
+            }
+            if (questionCount === 0 && session.answers) {
+                questionCount = session.answers.length;
+            }
 
             summaries.push({
                 id: session.id,
-                startTime: session.startTime,
-                duration: session.duration,
-                interviewType: session.interviewType,
+                startTime,
+                duration: session.duration || 0,
+                interviewType,
                 questionCount,
                 tags: session.tags,
             });

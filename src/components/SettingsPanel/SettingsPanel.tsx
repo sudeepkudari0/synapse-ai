@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Save, CheckCircle } from 'lucide-react';
 import { ProfileSection } from './ProfileSection';
+import { StoryBank } from './StoryBank';
 
 interface SettingsPanelProps {
     onClose: () => void;
@@ -8,7 +9,7 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps) {
-    const [activeTab, setActiveTab] = useState<'profile' | 'models' | 'api'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'models' | 'api' | 'stories'>('profile');
     const [models, setModels] = useState<string[]>([]);
     const [settings, setSettings] = useState({
         whisperModel: 'small.en',
@@ -18,22 +19,42 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         ollamaModel: 'qwen3-vl:2b',
         ollamaBaseUrl: 'http://localhost:11434/v1',
         interviewType: 'general',
-        questionDetectionMode: 'auto',
+        questionDetectionMode: 'hybrid',
         showDeliveryMetrics: true
     });
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [downloadError, setDownloadError] = useState<string | null>(null);
     const [selectedDownload, setSelectedDownload] = useState('base.en');
 
     const downloadableModels = ['tiny.en', 'base.en', 'small.en', 'medium.en'];
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isInitialLoadRef = useRef(true);
 
     useEffect(() => {
         loadData();
     }, []);
+
+    // Auto-save settings whenever they change (debounced)
+    useEffect(() => {
+        // Skip auto-save on initial load
+        if (isInitialLoadRef.current) return;
+
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+        }
+        saveTimerRef.current = setTimeout(() => {
+            autoSaveSettings();
+        }, 500);
+
+        return () => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        };
+    }, [settings]);
 
     const loadData = async () => {
         try {
@@ -52,12 +73,25 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     ollamaModel: settingsRes.settings.ollamaModel || 'qwen3-vl:2b',
                     ollamaBaseUrl: settingsRes.settings.ollamaBaseUrl || 'http://localhost:11434/v1',
                     interviewType: settingsRes.settings.interviewType || 'general',
-                    questionDetectionMode: settingsRes.settings.questionDetectionMode || 'auto',
+                    questionDetectionMode: settingsRes.settings.questionDetectionMode || 'hybrid',
                     showDeliveryMetrics: settingsRes.settings.showDeliveryMetrics !== false
                 });
             }
+            // Mark initial load complete after state is set
+            setTimeout(() => { isInitialLoadRef.current = false; }, 100);
         } catch (error) {
             console.error('Failed to load settings data:', error);
+            isInitialLoadRef.current = false;
+        }
+    };
+
+    const autoSaveSettings = async () => {
+        try {
+            await window.electronAPI.updateSettings(settings);
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 2000);
+        } catch (error) {
+            console.error('Auto-save settings failed:', error);
         }
     };
 
@@ -66,7 +100,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         try {
             await window.electronAPI.updateSettings(settings);
             onSettingsChanged();
-            onClose();
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 2000);
         } catch (error) {
             console.error('Failed to save settings:', error);
         } finally {
@@ -117,7 +152,14 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         <div className="flex flex-col border-t border-[var(--border-subtle)] animate-slide-up bg-zinc-900">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800">
-                <h2 className="text-sm font-semibold text-white">Settings</h2>
+                <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Settings</h2>
+                    {saveSuccess && (
+                        <span className="flex items-center text-[10px] text-emerald-400 animate-fade-in">
+                            <CheckCircle className="w-3 h-3 mr-0.5" /> Saved
+                        </span>
+                    )}
+                </div>
                 <button 
                     onClick={onClose}
                     className="p-1 text-zinc-400 hover:text-white rounded-md hover:bg-zinc-800 transition-colors"
@@ -129,27 +171,37 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                 {/* Tabs */}
                 <div className="flex border-b border-zinc-800">
                     <button
-                        className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                        className={`flex-1 py-2 text-xs font-medium transition-colors ${
                             activeTab === 'profile' 
                                 ? 'text-indigo-400 border-b-2 border-indigo-500' 
                                 : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50'
                         }`}
                         onClick={() => setActiveTab('profile')}
                     >
-                        Profile & Context
+                        Profile
                     </button>
                     <button
-                        className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                        className={`flex-1 py-2 text-xs font-medium transition-colors ${
+                            activeTab === 'stories' 
+                                ? 'text-indigo-400 border-b-2 border-indigo-500' 
+                                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50'
+                        }`}
+                        onClick={() => setActiveTab('stories')}
+                    >
+                        Story Bank
+                    </button>
+                    <button
+                        className={`flex-1 py-2 text-xs font-medium transition-colors ${
                             activeTab === 'models' 
                                 ? 'text-indigo-400 border-b-2 border-indigo-500' 
                                 : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50'
                         }`}
                         onClick={() => setActiveTab('models')}
                     >
-                        Whisper Models
+                        Models
                     </button>
                     <button
-                        className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                        className={`flex-1 py-2 text-xs font-medium transition-colors ${
                             activeTab === 'api' 
                                 ? 'text-indigo-400 border-b-2 border-indigo-500' 
                                 : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50'
@@ -195,11 +247,13 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                             onChange={(e) => setSettings({ ...settings, questionDetectionMode: e.target.value })}
                                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         >
-                                            <option value="auto">Auto-detect (Keyword Classifier)</option>
-                                            <option value="manual">Manual (Always use Default)</option>
+                                            <option value="hybrid">Hybrid (Keyword + LLM Fallback)</option>
+                                            <option value="regex">Regex Only (Fast, No LLM)</option>
+                                            <option value="llm">LLM Only (Accurate, Slower)</option>
+                                            <option value="manual">Manual (Always use Default Type)</option>
                                         </select>
                                         <p className="text-[10px] text-zinc-500 mt-1">
-                                            Auto-detect will try to classify the question and dynamically switch to the right answer template.
+                                            Hybrid uses fast keyword matching first and falls back to LLM. Settings auto-save on change.
                                         </p>
                                     </div>
                                     <div className="pt-2 border-t border-zinc-800/50 flex items-center justify-between">
@@ -222,6 +276,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                 </div>
                             </div>
                         </div>
+                    ) : activeTab === 'stories' ? (
+                        <StoryBank />
                     ) : activeTab === 'models' ? (
                         <div className="space-y-4">
                             <div>
@@ -395,21 +451,24 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                 </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end px-4 py-3 border-t border-zinc-800 bg-zinc-900/50">
-                <button
-                    onClick={onClose}
-                    className="px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white transition-colors mr-2"
-                >
-                    Cancel
-                </button>
-                <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-                >
-                    <Save className="w-3.5 h-3.5 mr-1.5" />
-                    {isSaving ? 'Saving...' : 'Save Settings'}
-                </button>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800 bg-zinc-900/50">
+                <p className="text-[10px] text-zinc-500">Settings auto-save on change</p>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={onClose}
+                        className="px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
+                    >
+                        Close
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        <Save className="w-3.5 h-3.5 mr-1.5" />
+                        {isSaving ? 'Saving...' : 'Save & Apply'}
+                    </button>
+                </div>
             </div>
         </div>
     );

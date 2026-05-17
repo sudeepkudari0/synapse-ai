@@ -3,9 +3,9 @@ import { X, Trash2, Clock, Calendar, FileText } from 'lucide-react';
 
 interface SessionItem {
     id: string;
-    timestamp: string;
+    startTime: string;
     duration: number;
-    type: string;
+    interviewType: string;
     questionCount: number;
 }
 
@@ -95,7 +95,7 @@ export function SessionHistory({ onClose, onLoadSession }: SessionHistoryProps) 
                             >
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="font-medium text-white text-xs">
-                                        {new Date(session.timestamp).toLocaleDateString(undefined, {
+                                        {new Date(session.startTime).toLocaleDateString(undefined, {
                                             weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
                                         })}
                                     </div>
@@ -114,7 +114,7 @@ export function SessionHistory({ onClose, onLoadSession }: SessionHistoryProps) 
                                     </span>
                                     <span className="flex items-center gap-1">
                                         <Calendar className="w-3 h-3" />
-                                        {session.type || 'general'}
+                                        {session.interviewType || 'general'}
                                     </span>
                                     <span className="flex items-center gap-1">
                                         <FileText className="w-3 h-3" />

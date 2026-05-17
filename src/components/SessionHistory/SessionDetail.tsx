@@ -5,27 +5,37 @@ import { exportAsMarkdown, exportAsJSON, downloadFile, copyToClipboard } from '.
 interface SessionDetailProps {
     session: {
         id: string;
-        timestamp: string;
+        timestamp?: string;
+        startTime?: string;
         duration: number;
-        type: string;
-        transcript: ChatBlock[];
+        type?: string;
+        interviewType?: string;
+        transcript?: ChatBlock[];
+        conversation?: ChatBlock[];
         answers: Answer[];
         metrics?: any;
+        deliveryMetrics?: any;
     };
     onClose: () => void;
     onBack: () => void;
 }
 
 export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) {
+    // Normalize field names across old/new schemas
+    const sessionTimestamp = session.startTime || session.timestamp || new Date().toISOString();
+    const sessionType = session.interviewType || session.type || 'general';
+    const sessionTranscript = session.transcript || session.conversation || [];
+    const sessionMetrics = session.metrics || session.deliveryMetrics;
+
     const buildExportSession = () => ({
         id: session.id,
-        startTime: session.timestamp,
-        interviewType: session.type,
-        conversation: session.transcript.map(b => ({ speaker: b.speaker, text: b.text })),
+        startTime: sessionTimestamp,
+        interviewType: sessionType,
+        conversation: sessionTranscript.map(b => ({ speaker: b.speaker, text: b.text })),
         answers: session.answers.map(a => ({ question: a.question, answer: a.answer, source: a.source })),
-        deliveryMetrics: session.metrics ? {
-            wordsPerMinute: session.metrics.wpm,
-            fillerWordCount: session.metrics.fillerWordCount,
+        deliveryMetrics: sessionMetrics ? {
+            wordsPerMinute: sessionMetrics.wpm,
+            fillerWordCount: sessionMetrics.fillerWordCount,
         } : undefined,
     });
 
@@ -37,13 +47,13 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
 
     const handleDownloadMarkdown = () => {
         const md = exportAsMarkdown(buildExportSession());
-        const filename = `synapse-session-${new Date(session.timestamp).toISOString().split('T')[0]}.md`;
+        const filename = `synapse-session-${new Date(sessionTimestamp).toISOString().split('T')[0]}.md`;
         downloadFile(md, filename, 'text/markdown');
     };
 
     const handleDownloadJSON = () => {
         const json = exportAsJSON(buildExportSession());
-        const filename = `synapse-session-${new Date(session.timestamp).toISOString().split('T')[0]}.json`;
+        const filename = `synapse-session-${new Date(sessionTimestamp).toISOString().split('T')[0]}.json`;
         downloadFile(json, filename, 'application/json');
     };
 
@@ -64,11 +74,11 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
                             Session Details
                         </h2>
                         <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-                            <span>{new Date(session.timestamp).toLocaleDateString()}</span>
+                            <span>{new Date(sessionTimestamp).toLocaleDateString()}</span>
                             <span>•</span>
                             <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {Math.floor(session.duration/60)}m {session.duration%60}s</span>
                             <span>•</span>
-                            <span className="capitalize">{session.type}</span>
+                            <span className="capitalize">{sessionType}</span>
                         </div>
                     </div>
                 </div>
@@ -109,7 +119,7 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
 
             {/* Content */}
             <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-6">
-                {session.metrics && (
+                {sessionMetrics && (
                     <div>
                         <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-zinc-800 pb-1">
                             Delivery Metrics
@@ -117,22 +127,22 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
                         <div className="grid grid-cols-3 gap-3">
                             <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-center">
                                 <div className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest">Talk Ratio</div>
-                                <div className="text-lg font-medium text-indigo-400">{Math.round(session.metrics.talkTimeRatio * 100)}%</div>
+                                <div className="text-lg font-medium text-indigo-400">{Math.round((sessionMetrics.talkTimeRatio || 0) * 100)}%</div>
                             </div>
                             <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-center">
                                 <div className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest">Filler Words</div>
-                                <div className="text-lg font-medium text-amber-400">{session.metrics.fillerWordCount}</div>
+                                <div className="text-lg font-medium text-amber-400">{sessionMetrics.fillerWordCount || 0}</div>
                             </div>
                             <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-center">
                                 <div className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest">Pacing</div>
-                                <div className="text-lg font-medium text-emerald-400">{session.metrics.wpm} <span className="text-[10px]">WPM</span></div>
+                                <div className="text-lg font-medium text-emerald-400">{sessionMetrics.wpm || 0} <span className="text-[10px]">WPM</span></div>
                             </div>
                         </div>
-                        {session.metrics.fillerWordCount > 0 && (
+                        {sessionMetrics.fillerWordCount > 0 && sessionMetrics.fillerWords && (
                             <div className="mt-3 bg-zinc-950 border border-zinc-800 rounded-lg p-3">
                                 <div className="text-[10px] text-zinc-500 mb-2 uppercase tracking-widest">Common Fillers Used</div>
                                 <div className="flex flex-wrap gap-2">
-                                    {Object.entries(session.metrics.fillerWords)
+                                    {Object.entries(sessionMetrics.fillerWords)
                                         .sort(([, a]: any, [, b]: any) => b - a)
                                         .map(([word, count]) => (
                                             <span key={word} className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-md text-[10px] text-zinc-400">
@@ -151,7 +161,7 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
                         Full Transcript
                     </h3>
                     <div className="space-y-3">
-                        {session.transcript.map((block, idx) => (
+                        {sessionTranscript.map((block, idx) => (
                             <div key={idx} className="text-xs">
                                 <span className={`font-semibold mr-2 ${block.speaker === 'user' ? 'text-indigo-400' : 'text-emerald-400'}`}>
                                     {block.speaker === 'user' ? 'You' : 'Interviewer'}:
@@ -159,7 +169,7 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
                                 <span className="text-zinc-300">{block.text}</span>
                             </div>
                         ))}
-                        {session.transcript.length === 0 && (
+                        {sessionTranscript.length === 0 && (
                             <div className="text-zinc-500 text-xs italic">No conversation recorded.</div>
                         )}
                     </div>
@@ -175,7 +185,7 @@ export function SessionDetail({ session, onClose, onBack }: SessionDetailProps) 
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="text-[10px] text-zinc-500 font-mono">#{idx + 1}</div>
                                     <div className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded capitalize">
-                                        {ans.detectedType || session.type || 'general'}
+                                        {ans.detectedType || sessionType || 'general'}
                                     </div>
                                 </div>
                                 <div className="text-xs text-zinc-300 mb-2 pb-2 border-b border-zinc-800/50">

@@ -147,13 +147,15 @@ function App(): JSX.Element {
                                 const now = Date.now();
                                 if (now - lastAnswerTimeRef.current > 10000) {
                                     autoGenerateTimeoutRef.current = setTimeout(async () => {
-                                        // Run smart detection
-                                        const contextTexts = newConv.slice(0, -1).map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`);
-                                        
                                         // Fetch current settings for detection mode
                                         const settingsRes = await window.electronAPI.getSettings();
                                         const mode = settingsRes.success && settingsRes.settings ? settingsRes.settings.questionDetectionMode : 'hybrid';
                                         
+                                        // Skip auto-detection in manual mode
+                                        if (mode === 'manual') return;
+
+                                        // Run smart detection
+                                        const contextTexts = newConv.slice(0, -1).map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`);
                                         const result = await isQuestion(currentLastBlock.text, contextTexts, mode as any);
                                         
                                         if (result.isQuestion) {
@@ -204,15 +206,21 @@ function App(): JSX.Element {
             if (conversationRef.current.length > 0 || answers.length > 0) {
                 try {
                     const metrics = analyzeDelivery(conversationRef.current, sessionTime);
+                    const now = new Date().toISOString();
                     const sessionData = {
                         id: Date.now().toString(),
-                        timestamp: new Date().toISOString(),
+                        startTime: now,
+                        endTime: now,
+                        timestamp: now,
                         duration: sessionTime,
-                        type: 'general', // You could use a detected or selected type here if available
+                        interviewType: 'general',
+                        type: 'general',
                         questionCount: answers.length,
+                        conversation: conversationRef.current,
                         transcript: conversationRef.current,
                         answers: answers,
                         metrics: metrics,
+                        deliveryMetrics: metrics,
                     };
                     const res = await window.electronAPI.session.save(sessionData);
                     if (!res.success) {

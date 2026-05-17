@@ -1,6 +1,6 @@
 export type DetectionMode = 'regex' | 'llm' | 'hybrid';
 
-const REGEX_PATTERN = /^(what|where|when|why|who|how|can you|could you|tell me|would you|do you|please explain|is there|are there|describe|walk me through)/i;
+const REGEX_PATTERN = /^(what|where|when|why|who|how|can you|could you|tell me|would you|do you|did you|have you|please explain|is there|are there|describe|walk me through|explain|give me an example|let's talk about|talk about|share|elaborate|discuss)/i;
 
 export async function isQuestion(
     text: string, 

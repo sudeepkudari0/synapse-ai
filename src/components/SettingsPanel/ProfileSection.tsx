@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Save, CheckCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { CheckCircle } from 'lucide-react';
 import { useProfile } from '../../hooks/useProfile';
 
 export function ProfileSection() {
     const { profile, isProfileLoaded, saveProfile } = useProfile();
-    const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [localProfile, setLocalProfile] = useState({
         resume: '',
@@ -13,6 +12,8 @@ export function ProfileSection() {
         targetRole: '',
         skills: ''
     });
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isInitialLoadRef = useRef(true);
 
     // Sync local state when profile is loaded
     useEffect(() => {
@@ -24,38 +25,59 @@ export function ProfileSection() {
                 targetRole: profile.targetRole || '',
                 skills: profile.skills ? profile.skills.join(', ') : ''
             });
+            // Mark initial load complete after state sync
+            setTimeout(() => { isInitialLoadRef.current = false; }, 100);
         }
     }, [isProfileLoaded, profile]);
 
-    const handleSave = async () => {
-        setIsSaving(true);
-        setSaveSuccess(false);
+    // Auto-save profile on change (debounced 1s)
+    useEffect(() => {
+        if (isInitialLoadRef.current) return;
 
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+        }
+        saveTimerRef.current = setTimeout(() => {
+            doSave();
+        }, 1000);
+
+        return () => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        };
+    }, [localProfile]);
+
+    const doSave = async () => {
         const updates = {
             ...localProfile,
             skills: localProfile.skills.split(',').map(s => s.trim()).filter(s => s.length > 0)
         };
 
         const success = await saveProfile(updates);
-        
-        setIsSaving(false);
+
         if (success) {
             setSaveSuccess(true);
-            setTimeout(() => setSaveSuccess(false), 3000);
+            setTimeout(() => setSaveSuccess(false), 2000);
         }
     };
 
     return (
-        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-4 pr-2 custom-scrollbar">
             <div className="flex items-center justify-between mb-4 border-b border-zinc-800 pb-2">
                 <h3 className="text-sm font-semibold text-white">Candidate Profile</h3>
-                {isProfileLoaded ? (
-                    <span className="flex items-center text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
-                        <CheckCircle className="w-3 h-3 mr-1" /> Profile Loaded
-                    </span>
-                ) : (
-                    <span className="text-xs text-zinc-500">No profile set</span>
-                )}
+                <div className="flex items-center gap-2">
+                    {saveSuccess && (
+                        <span className="flex items-center text-[10px] text-emerald-400 animate-fade-in">
+                            <CheckCircle className="w-3 h-3 mr-0.5" /> Saved
+                        </span>
+                    )}
+                    {isProfileLoaded ? (
+                        <span className="flex items-center text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+                            <CheckCircle className="w-3 h-3 mr-1" /> Profile Loaded
+                        </span>
+                    ) : (
+                        <span className="text-xs text-zinc-500">No profile set</span>
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -111,21 +133,9 @@ export function ProfileSection() {
                     className="w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 />
             </div>
-
-            <div className="pt-2 flex justify-end items-center">
-                {saveSuccess && <span className="text-xs text-emerald-400 mr-3">Saved successfully!</span>}
-                <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex items-center px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium rounded-lg transition-colors border border-zinc-700 disabled:opacity-50"
-                >
-                    <Save className="w-3.5 h-3.5 mr-1.5" />
-                    {isSaving ? 'Saving...' : 'Save Profile'}
-                </button>
-            </div>
             
             <p className="text-[10px] text-zinc-500 mt-2 text-center">
-                This profile data stays 100% local on your machine. It is injected into LLM prompts to provide personalized answers.
+                Profile auto-saves as you type. Your data stays 100% local on your machine.
             </p>
         </div>
     );
