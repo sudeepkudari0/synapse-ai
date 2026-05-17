@@ -6,6 +6,8 @@ export interface AppSettings {
     version: number;
     sttEngine: 'whisper' | 'moonshine';
     whisperModel: string;
+    moonshineModel: string;
+    downloadedMoonshineModels: string[];
     geminiApiKey: string;
     groqApiKey: string;
     useOllamaOnly: boolean;
@@ -19,12 +21,14 @@ export interface AppSettings {
     isESLMode: boolean;
 }
 
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 7;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
     sttEngine: 'moonshine',
     whisperModel: 'small.en',
+    moonshineModel: 'MEDIUM_STREAMING',
+    downloadedMoonshineModels: [],
     geminiApiKey: '',
     groqApiKey: '',
     useOllamaOnly: false,
@@ -73,6 +77,22 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             ...settings,
             sttEngine: 'moonshine',
             version: 5,
+        };
+    },
+    5: (settings: any) => {
+        // v5 -> v6: Add moonshineModel
+        return {
+            ...settings,
+            moonshineModel: 'MEDIUM_STREAMING',
+            version: 6,
+        };
+    },
+    6: (settings: any) => {
+        // v6 -> v7: Add downloadedMoonshineModels
+        return {
+            ...settings,
+            downloadedMoonshineModels: [],
+            version: 7,
         };
     },
 };

@@ -1,4 +1,21 @@
 import os
+import sys
+
+download_env = os.environ.get("MOONSHINE_DOWNLOAD_ONLY")
+if download_env:
+    from moonshine_voice.download import get_model_for_language
+    from moonshine_voice import ModelArch
+    model_name = download_env.upper()
+    try:
+        arch_type = getattr(ModelArch, model_name)
+        print(f"Downloading model {model_name}...")
+        get_model_for_language('en', arch_type)
+        print("Download Complete.")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
 import io
 import argparse
 import soundfile as sf
@@ -19,9 +36,17 @@ def initialize_model():
     from moonshine_voice import ModelArch
     from moonshine_voice.transcriber import Transcriber
     
-    print("Loading Moonshine v2 (streaming-medium) on CUDA...")
+    print(f"Loading Moonshine v2 on CUDA...")
     
-    path, arch = get_model_for_language('en', ModelArch.MEDIUM_STREAMING)
+    model_env = os.environ.get("MOONSHINE_MODEL", "MEDIUM_STREAMING").upper()
+    try:
+        arch_type = getattr(ModelArch, model_env)
+    except AttributeError:
+        print(f"Invalid model {model_env}, falling back to MEDIUM_STREAMING")
+        arch_type = ModelArch.MEDIUM_STREAMING
+
+    print(f"Using model architecture: {arch_type.name}")
+    path, arch = get_model_for_language('en', arch_type)
     
     try:
         transcriber = Transcriber(
@@ -96,7 +121,7 @@ async def inference(file: UploadFile = File(...)):
 
 @app.get("/")
 def health():
-    return {"status": "ok", "model": "moonshine-streaming-medium"}
+    return {"status": "ok", "model": os.environ.get("MOONSHINE_MODEL", "MEDIUM_STREAMING").upper()}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

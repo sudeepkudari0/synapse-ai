@@ -14,6 +14,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [settings, setSettings] = useState({
         sttEngine: 'moonshine' as 'whisper' | 'moonshine',
         whisperModel: 'small.en',
+        moonshineModel: 'MEDIUM_STREAMING',
+        downloadedMoonshineModels: [] as string[],
         geminiApiKey: '',
         groqApiKey: '',
         useOllamaOnly: false,
@@ -31,9 +33,11 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [downloadError, setDownloadError] = useState<string | null>(null);
     const [selectedDownload, setSelectedDownload] = useState('base.en');
+    const [selectedMoonshineDownload, setSelectedMoonshineDownload] = useState('MEDIUM_STREAMING');
     const [serverStatus, setServerStatus] = useState<{ exists: boolean; error?: string } | null>(null);
 
     const downloadableModels = ['tiny.en', 'base.en', 'small.en', 'medium.en'];
+    const downloadableMoonshineModels = ['TINY', 'BASE', 'TINY_STREAMING', 'BASE_STREAMING', 'SMALL_STREAMING', 'MEDIUM_STREAMING'];
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isInitialLoadRef = useRef(true);
 
@@ -74,6 +78,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                 setSettings({
                     sttEngine: settingsRes.settings.sttEngine || 'moonshine',
                     whisperModel: settingsRes.settings.whisperModel || 'small.en',
+                    moonshineModel: settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING',
+                    downloadedMoonshineModels: settingsRes.settings.downloadedMoonshineModels || [],
                     geminiApiKey: settingsRes.settings.geminiApiKey || '',
                     groqApiKey: settingsRes.settings.groqApiKey || '',
                     useOllamaOnly: settingsRes.settings.useOllamaOnly || false,
@@ -95,6 +101,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const autoSaveSettings = async () => {
         try {
             await window.electronAPI.updateSettings(settings);
+            onSettingsChanged();
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 2000);
         } catch (error) {
@@ -151,6 +158,39 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         } catch (err: any) {
             setDownloadError(err.message || 'Download failed');
         } finally {
+            setDownloadingModel(null);
+        }
+    };
+
+    const handleDownloadMoonshineModel = async () => {
+        setDownloadingModel(selectedMoonshineDownload);
+        setDownloadProgress(0); // Progress not natively supported by this script yet, just show busy
+        setDownloadError(null);
+        try {
+            // Fake progress since we can't easily capture python stderr progress
+            const interval = setInterval(() => {
+                setDownloadProgress(p => Math.min(p + 5, 95));
+            }, 500);
+            
+            const result = await window.electronAPI.downloadMoonshineModel(selectedMoonshineDownload);
+            clearInterval(interval);
+            
+            if (result.success) {
+                setDownloadProgress(100);
+                // Save to downloaded models list
+                if (!settings.downloadedMoonshineModels.includes(selectedMoonshineDownload)) {
+                    const newDownloaded = [...settings.downloadedMoonshineModels, selectedMoonshineDownload];
+                    setSettings(prev => ({ ...prev, downloadedMoonshineModels: newDownloaded }));
+                    // Immediately save to persistent store so it's not lost if app closes
+                    window.electronAPI.updateSettings({ ...settings, downloadedMoonshineModels: newDownloaded }).catch(console.error);
+                }
+                setTimeout(() => setDownloadingModel(null), 1000);
+            } else {
+                setDownloadError(result.error || 'Download failed');
+                setDownloadingModel(null);
+            }
+        } catch (err: any) {
+            setDownloadError(err.message || 'Download failed');
             setDownloadingModel(null);
         }
     };
@@ -356,6 +396,76 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                                             >
                                                 {models.includes(selectedDownload) ? 'Installed' : 'Download'}
+                                            </button>
+                                        </div>
+                                        {downloadingModel && (
+                                            <div className="mt-2">
+                                                <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                                                    <span>Downloading {downloadingModel}...</span>
+                                                    <span>{downloadProgress}%</span>
+                                                </div>
+                                                <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                                                    <div 
+                                                        className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
+                                                        style={{ width: `${downloadProgress}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                        {downloadError && (
+                                            <p className="mt-2 text-xs text-red-400">{downloadError}</p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
+                            {settings.sttEngine === 'moonshine' && (
+                                <>
+                                    <div className="pt-4 border-t border-zinc-800">
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                            Active Moonshine Model
+                                        </label>
+                                        <select
+                                            value={settings.moonshineModel}
+                                            onChange={(e) => setSettings({ ...settings, moonshineModel: e.target.value })}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            {settings.downloadedMoonshineModels.length === 0 ? (
+                                                <option value={settings.moonshineModel}>{settings.moonshineModel} (Not Downloaded)</option>
+                                            ) : (
+                                                settings.downloadedMoonshineModels.map(model => (
+                                                    <option key={model} value={model}>
+                                                        {model}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                        <p className="mt-2 text-xs text-zinc-500">
+                                            Select the transcription model to use.
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="pt-4 border-t border-zinc-800">
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                            Download Moonshine Model
+                                        </label>
+                                        <div className="flex gap-2 mb-2">
+                                            <select
+                                                value={selectedMoonshineDownload}
+                                                onChange={(e) => setSelectedMoonshineDownload(e.target.value)}
+                                                disabled={downloadingModel !== null}
+                                                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                            >
+                                                {downloadableMoonshineModels.map(m => (
+                                                    <option key={m} value={m}>{m}</option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={handleDownloadMoonshineModel}
+                                                disabled={downloadingModel !== null || settings.downloadedMoonshineModels.includes(selectedMoonshineDownload)}
+                                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                            >
+                                                {settings.downloadedMoonshineModels.includes(selectedMoonshineDownload) ? 'Installed' : 'Download'}
                                             </button>
                                         </div>
                                         {downloadingModel && (

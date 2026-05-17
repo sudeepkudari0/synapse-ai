@@ -18,8 +18,9 @@
     box-shadow: var(--shadow-widget);
     overflow: hidden;
     transition: max-height var(--duration-slow) var(--ease-out),
+                width var(--duration-slow) var(--ease-out),
                 box-shadow var(--duration-normal) var(--ease-out);
-    will-change: max-height;
+    will-change: max-height, width;
     /* Flex column so widget-body fills remaining space */
     display: flex;
     flex-direction: column;
@@ -34,11 +35,13 @@
 
 .widget--collapsed {
     max-height: var(--header-height);
+    width: var(--widget-collapsed-width, var(--widget-width));
 }
 
 .widget--expanded {
-    /* Dynamic: grows with content, capped at 85% of viewport height */
-    max-height: 85vh;
+    /* Dynamic: grows with content, capped at 90% of viewport height */
+    max-height: 90vh;
+    width: var(--widget-expanded-width, 860px);
 }
 
 /* ─── Widget Body (expandable content area) ─── */
@@ -52,7 +55,7 @@
     /* Fill remaining widget space and scroll when needed */
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden; /* Changed from overflow-y:auto — inner panels handle their own scroll */
 }
 
 .widget--expanded .widget-body {
@@ -60,6 +63,41 @@
     transform: translateY(0);
     pointer-events: auto;
     transition-delay: 80ms;
+}
+
+/* ─── Split Layout ─── */
+
+.split-layout {
+    display: flex;
+    height: calc(85vh - var(--header-height) - 40px); /* Reserve space for bottom bar */
+    min-height: 300px;
+}
+
+.split-layout__left {
+    flex: 1;
+    min-width: 0;
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+}
+
+.split-layout__right {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ─── Bottom Bar ─── */
+
+.widget-bottom-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    border-top: 1px solid var(--border-subtle);
+    background: rgba(0, 0, 0, 0.3);
 }
 
 /* ─── Widget Header ─── */
@@ -111,12 +149,27 @@
     }
 }
 
+@keyframes waveform {
+    0%, 100% {
+        transform: scaleY(0.3);
+        opacity: 0.4;
+    }
+    50% {
+        transform: scaleY(1);
+        opacity: 0.8;
+    }
+}
+
 .animate-slide-up {
     animation: slide-up var(--duration-normal) var(--ease-out) both;
 }
 
 .animate-fade-in {
     animation: fade-in var(--duration-fast) var(--ease-out) both;
+}
+
+.animate-waveform {
+    animation: waveform 1s ease-in-out infinite;
 }
 
 /* ─── Streaming Cursor ─── */
@@ -151,6 +204,40 @@
     font-size: 0.85em;
 }
 
+/* ─── Toggle Switch ─── */
+
+.toggle-switch {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: background 200ms ease;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toggle-switch--active {
+    background: rgba(6, 182, 212, 0.4);
+    border-color: rgba(6, 182, 212, 0.5);
+}
+
+.toggle-switch__knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 200ms ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-switch--active .toggle-switch__knob {
+    transform: translateX(16px);
+}
+
 /* ─── Line Clamp Utility ─── */
 
 .line-clamp-3 {
@@ -164,4 +251,18 @@
 
 .tabular-nums {
     font-variant-numeric: tabular-nums;
+}
+
+/* ─── Privacy Badge ─── */
+
+.privacy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.15);
+    font-size: 10px;
+    color: rgba(34, 197, 94, 0.7);
 }

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { logger } from '../lib/logger';
 import { MicVAD } from '@ricky0123/vad-web';
 import ortWasmThreadedMjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url';
@@ -11,6 +11,7 @@ interface UseMixedAudioRecorderReturn {
     startRecording: () => Promise<void>;
     stopRecording: () => void;
     clearChunks: () => void;
+    audioLevels: { mic: number; system: number };
 }
 
 /**
@@ -25,6 +26,8 @@ export function useMixedAudioRecorder(
     onInterviewerUtteranceEnd?: () => void,
     onInterviewerSpeechStart?: () => void
 ): UseMixedAudioRecorderReturn {
+    const [audioLevels, setAudioLevels] = useState({ mic: 0, system: 0 });
+    const audioLevelDecayRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const micStreamRef = useRef<MediaStream | null>(null);
     const systemStreamRef = useRef<MediaStream | null>(null);
     
@@ -130,6 +133,13 @@ export function useMixedAudioRecorder(
                     onSpeechEnd: (audio: Float32Array) => {
                         logger.debug(`VAD [${source}]: Speech ended. Length: ${(audio.length / 16000).toFixed(1)}s`);
                         
+                        // Compute RMS level for waveform visualization
+                        const rms = computeRMS(audio);
+                        setAudioLevels(prev => ({
+                            ...prev,
+                            [source === 'user' ? 'mic' : 'system']: Math.min(rms * 5, 1), // Normalize to 0-1
+                        }));
+
                         // Energy-based pre-filter to catch silent/noise frames that VAD might have misclassified
                         if (hasSignificantEnergy(audio)) {
                             onNewChunkRef.current?.(source, audio);
@@ -159,6 +169,14 @@ export function useMixedAudioRecorder(
                 systemVADRef.current.start();
             }
 
+            // Decay audio levels over time to create smooth falloff
+            audioLevelDecayRef.current = setInterval(() => {
+                setAudioLevels(prev => ({
+                    mic: prev.mic > 0.01 ? prev.mic * 0.85 : 0,
+                    system: prev.system > 0.01 ? prev.system * 0.85 : 0,
+                }));
+            }, 100);
+
         } catch (error) {
             logger.error('Failed to start recording:', error);
             throw error;
@@ -186,6 +204,12 @@ export function useMixedAudioRecorder(
             systemStreamRef.current = null;
         }
 
+        if (audioLevelDecayRef.current) {
+            clearInterval(audioLevelDecayRef.current);
+            audioLevelDecayRef.current = null;
+        }
+        setAudioLevels({ mic: 0, system: 0 });
+
     }, []);
 
     const clearChunks = useCallback(() => {}, []);
@@ -194,5 +218,17 @@ export function useMixedAudioRecorder(
         startRecording,
         stopRecording,
         clearChunks,
+        audioLevels,
     };
+}
+
+/** Compute RMS (Root Mean Square) of an audio buffer */
+function computeRMS(buffer: Float32Array): number {
+    let sum = 0;
+    // Sample every 4th value for performance
+    const step = 4;
+    for (let i = 0; i < buffer.length; i += step) {
+        sum += buffer[i] * buffer[i];
+    }
+    return Math.sqrt(sum / (buffer.length / step));
 }

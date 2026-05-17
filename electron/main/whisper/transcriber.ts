@@ -14,7 +14,7 @@ function debugLog(...args: any[]) {
 
 /** Always log important server lifecycle events regardless of debug flag. */
 function serverLog(...args: any[]) {
-    console.log('[Whisper Server]', ...args);
+    console.log('[STT Server]', ...args);
 }
 
 /**
@@ -86,32 +86,35 @@ export class WhisperTranscriber {
 
     async initialize(modelName: string = 'small.en'): Promise<void> {
         const currentEngine = getSettings().sttEngine || 'moonshine';
+        
+        let expectedModelPath = '';
+        if (currentEngine === 'moonshine') {
+            expectedModelPath = getSettings().moonshineModel || 'MEDIUM_STREAMING';
+        } else {
+            const modelsDir = path.join(app.getPath('userData'), 'whisper-models');
+            expectedModelPath = path.join(modelsDir, `ggml-${modelName}.bin`);
+        }
 
         // Already initialized with same model & engine — skip.
-        if (this.isInitialized && this.modelName === modelName && this.sttEngine === currentEngine && this.serverProcess) {
-            debugLog(`STT server already running (${currentEngine} - ${this.modelName})`);
+        if (this.isInitialized && this.modelPath === expectedModelPath && this.sttEngine === currentEngine && this.serverProcess) {
+            debugLog(`STT server already running (${currentEngine} - ${this.modelPath})`);
             return;
         }
 
         // If switching models or engine, tear down old server first.
-        if (this.serverProcess && (this.modelName !== modelName || this.sttEngine !== currentEngine)) {
+        if (this.serverProcess && (this.modelPath !== expectedModelPath || this.sttEngine !== currentEngine)) {
             await this.dispose();
         }
 
         this.modelName = modelName;
         this.sttEngine = currentEngine;
+        this.modelPath = expectedModelPath;
         
         const basePath = resolveWhisperBasePath();
         const exeName = this.sttEngine === 'moonshine' ? 'moonshine-server.exe' : 'whisper-server.exe';
         this.serverExePath = path.join(basePath, exeName);
         
-        if (this.sttEngine === 'moonshine') {
-            this.modelPath = 'moonshine-streaming-medium';
-        } else {
-            // Whisper.cpp model validation
-            const modelsDir = path.join(app.getPath('userData'), 'whisper-models');
-            this.modelPath = path.join(modelsDir, `ggml-${modelName}.bin`);
-            
+        if (this.sttEngine !== 'moonshine') {
             if (!fs.existsSync(this.modelPath)) {
                 throw new Error(`Model file not found at ${this.modelPath}. Please download it in settings.`);
             }
@@ -128,7 +131,8 @@ export class WhisperTranscriber {
         // Start the server and wait for it to become ready
         await this.startServer();
         this.isInitialized = true;
-        serverLog(`Ready — engine "${this.sttEngine}", model "${modelName}" loaded, listening on ${SERVER_HOST}:${SERVER_PORT}`);
+        const loggedModel = this.sttEngine === 'moonshine' ? this.modelPath : modelName;
+        serverLog(`Ready — engine "${this.sttEngine}", model "${loggedModel}" loaded, listening on ${SERVER_HOST}:${SERVER_PORT}`);
     }
 
     /**
@@ -148,6 +152,7 @@ export class WhisperTranscriber {
                 cwd: path.dirname(this.serverExePath),
                 windowsHide: true,
                 stdio: ['ignore', 'pipe', 'pipe'],
+                env: { ...process.env, MOONSHINE_MODEL: this.modelPath }
             });
 
             this.serverProcess = proc;

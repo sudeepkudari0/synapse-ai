@@ -47,7 +47,9 @@
   --duration-slow: 350ms;
 
   /* Layout */
-  --widget-width: 400px;
+  --widget-width: 860px;
+  --widget-collapsed-width: 420px;
+  --widget-expanded-width: 860px;
   --header-height: 48px;
   --widget-radius: 16px;
 }

@@ -17,6 +17,7 @@ const IPC_CHANNELS = {
     TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
     DOWNLOAD_WHISPER_MODEL: 'whisper:download-model',
+    DOWNLOAD_MOONSHINE_MODEL: 'moonshine:download-model',
     SESSION_SAVE: 'session:save',
     SESSION_LOAD: 'session:load',
     SESSION_LIST: 'session:list',
@@ -142,6 +143,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     getAvailableModels: async () => {
         return await ipcRenderer.invoke(IPC_CHANNELS.GET_AVAILABLE_MODELS);
+    },
+    
+    downloadMoonshineModel: async (modelName: string) => {
+        return await ipcRenderer.invoke(IPC_CHANNELS.DOWNLOAD_MOONSHINE_MODEL, modelName);
     },
     
     checkSttServer: async (engine: 'whisper' | 'moonshine') => {

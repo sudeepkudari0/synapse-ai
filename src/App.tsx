@@ -7,24 +7,27 @@ import { useLLM } from './hooks/useLLM';
 import { useProfile } from './hooks/useProfile';
 import { classifyQuestion } from './lib/interview-classifier';
 import { isQuestionSync } from './lib/question-detector';
-import { predictFollowUps } from './lib/follow-up-predictor';
 import { analyzeDelivery } from './lib/delivery-analyzer';
 import { getCodeAnalysisPrompt } from './lib/prompts/templates/code-analysis';
 import { TimestampDeduplicator } from './lib/timestamp-deduplicator';
 import { filterHallucinations } from './lib/hallucination-filter';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
-import type { ChatBlock, Answer } from './state';
+import type { ChatBlock, Answer, DetectedQuestion, AnswerOption } from './state';
 
 function App(): JSX.Element {
     // ─── Zustand stores ───
     const {
         conversation, isRecording, sessionTime,
-        setConversation, setIsRecording, setSessionTime, clearTranscript, resetSession,
+        setConversation, setIsRecording, setSessionTime, clearTranscript,
     } = useSessionStore();
 
     const {
-        answers, currentAnswerIndex, isGenerating,
-        addAnswer, updateAnswer, removeAnswer, navigateAnswer, clearAnswers, setIsGenerating,
+        answers, isGenerating,
+        candidateQuestions, detectedQuestions, expandedQuestionId,
+        addAnswer, updateAnswer,
+        addCandidateQuestion, removeCandidateQuestion, clearCandidateQuestions, setCandidateStatus,
+        addDetectedQuestion, updateQuestionOption, selectOption,
+        clearDetectedQuestions, setQuestionGenerating,
     } = useAnswerStore();
 
     const {
@@ -32,16 +35,34 @@ function App(): JSX.Element {
         toggleExpanded, setExpanded, toggleSettings, toggleChat, toggleHistory, togglePractice, setCapturing,
     } = useUIStore();
 
-    // ─── Refs (not state — no re-render needed) ───
+    // ─── App-level state ───
+    const [autoDetectionEnabled, setAutoDetectionEnabled] = useState(true);
+    const [sttEngine, setSttEngine] = useState('Whisper.cpp');
+
+    // Load preferences from settings on mount
+    useEffect(() => {
+        window.electronAPI.getSettings().then((res: any) => {
+            if (res.success && res.settings) {
+                const mode = res.settings.questionDetectionMode || 'heuristic';
+                setAutoDetectionEnabled(mode !== 'manual');
+
+                // Set STT engine display name
+                const engine = res.settings.sttEngine || 'whisper';
+                setSttEngine(engine === 'moonshine' ? 'Moonshine' : 'Whisper.cpp');
+            }
+        });
+    }, []);
+
+    // ─── Refs ───
     const transcriptionQueueRef = useRef<{source: SpeakerSource, chunk: Float32Array}[]>([]);
     const isTranscribingRef = useRef(false);
     const userStabilizerRef = useRef(new TimestampDeduplicator());
     const interviewerStabilizerRef = useRef(new TimestampDeduplicator());
     const conversationRef = useRef<ChatBlock[]>([]);
-    const autoGenerateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoDetectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const autoCaptureTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const lastAnswerTimeRef = useRef<number>(0);
+    const lastDetectionTimeRef = useRef<number>(0);
 
     // Sync conversationRef with store
     useEffect(() => {
@@ -53,7 +74,7 @@ function App(): JSX.Element {
     const { generateAnswerWithTemplate, generateResponse } = useLLM();
     const { profile } = useProfile();
 
-    // ─── Pre-load Whisper model on startup ───
+    // Pre-load Whisper model on startup
     useEffect(() => {
         loadModel();
     }, [loadModel]);
@@ -78,12 +99,11 @@ function App(): JSX.Element {
     // ─── Auto-capture in Code Mode ───
     useEffect(() => {
         if (isRecording && isCodeMode) {
-            // Check settings for auto-capture preference
             window.electronAPI.getSettings().then((res: any) => {
                 if (res.success && res.settings?.autoCaptureCodingMode) {
                     autoCaptureTimerRef.current = setInterval(() => {
                         handleCaptureScreen();
-                    }, 30000); // Every 30 seconds
+                    }, 30000);
                 }
             });
         } else {
@@ -112,7 +132,6 @@ function App(): JSX.Element {
                 if (!nextItem) continue;
 
                 try {
-                    // Prefix conditioning: last 32 words from the SAME speaker
                     const lastSpeakerBlocks = conversationRef.current
                         .filter(b => b.speaker === nextItem.source)
                         .slice(-3);
@@ -159,19 +178,18 @@ function App(): JSX.Element {
 
                             conversationRef.current = newConv;
 
-                            // If user starts speaking, cancel any pending auto-answer
-                            if (nextItem.source === 'user' && autoGenerateTimeoutRef.current) {
-                                clearTimeout(autoGenerateTimeoutRef.current);
-                                autoGenerateTimeoutRef.current = null;
+                            // If user starts speaking, cancel any pending detection
+                            if (nextItem.source === 'user' && autoDetectTimeoutRef.current) {
+                                clearTimeout(autoDetectTimeoutRef.current);
+                                autoDetectTimeoutRef.current = null;
                             }
 
-                            // Phase 2: If new interviewer text arrives during confirmation
-                            // window, reset the timer (Whisper is still catching up)
-                            if (nextItem.source === 'interviewer' && autoGenerateTimeoutRef.current) {
-                                console.log('[Detection] New interviewer text arrived — resetting confirmation window');
-                                clearTimeout(autoGenerateTimeoutRef.current);
-                                autoGenerateTimeoutRef.current = null;
-                                startConfirmationWindow(); // Will use the latest conversation text via ref
+                            // If new interviewer text arrives during detection window, reset it
+                            if (nextItem.source === 'interviewer' && autoDetectTimeoutRef.current) {
+                                console.log('[Detection] New interviewer text arrived — resetting detection window');
+                                clearTimeout(autoDetectTimeoutRef.current);
+                                autoDetectTimeoutRef.current = null;
+                                startDetectionWindow();
                             }
 
                             return newConv;
@@ -187,40 +205,25 @@ function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isModelLoaded, transcribe, setConversation]);
 
-    // ─── Two-phase confirmation window for question detection ───
-    //
-    // The problem: VAD fires onSpeechEnd on brief pauses (breaths), but the
-    // interviewer may still be mid-sentence. If we detect immediately, we get
-    // partial questions like "Can you explain?" instead of the full
-    // "Can you explain closures in Java with code example?"
-    //
-    // Solution: Confirmation window
-    // Phase 1: onSpeechEnd fires → start a 3.5s timer
-    // Phase 2: If interviewer speaks again OR new transcript text arrives → reset timer
-    //          If 3.5s passes with no activity → run detection on full text
+    // ─── Detection Window ───
+    // Instead of auto-answering, we now just ADD the question to the candidates list.
+    // The user will click to trigger answer generation.
 
-    const CONFIRMATION_WINDOW_MS = 3500;
+    const DETECTION_WINDOW_MS = 3500;
 
-    const startConfirmationWindow = useCallback(() => {
-        // 10s cooldown between auto-answers
-        if (Date.now() - lastAnswerTimeRef.current < 10000) return;
+    const startDetectionWindow = useCallback(() => {
+        // 6s cooldown between detections to avoid flooding the candidates list
+        if (Date.now() - lastDetectionTimeRef.current < 6000) return;
 
-        autoGenerateTimeoutRef.current = setTimeout(async () => {
-            autoGenerateTimeoutRef.current = null;
+        autoDetectTimeoutRef.current = setTimeout(() => {
+            autoDetectTimeoutRef.current = null;
 
-            // Check settings — skip in manual mode
-            const settingsRes = await window.electronAPI.getSettings();
-            const mode = settingsRes.success && settingsRes.settings
-                ? settingsRes.settings.questionDetectionMode
-                : 'heuristic';
-            if (mode === 'manual') return;
+            if (!autoDetectionEnabled) return;
 
-            // Get the last interviewer block from conversation
             const conv = conversationRef.current;
             const lastInterviewerBlock = [...conv].reverse().find(b => b.speaker === 'interviewer');
             if (!lastInterviewerBlock || !lastInterviewerBlock.text.trim()) return;
 
-            // Run multi-signal detection on the complete utterance
             const detection = isQuestionSync(lastInterviewerBlock.text);
 
             console.log(
@@ -230,31 +233,33 @@ function App(): JSX.Element {
             );
 
             if (detection.isQuestion) {
-                lastAnswerTimeRef.current = Date.now();
-                triggerAutoAnswer();
+                lastDetectionTimeRef.current = Date.now();
+                // Add to candidates list — deduplication happens inside the store
+                addCandidateQuestion(
+                    lastInterviewerBlock.text,
+                    detection.confidence,
+                    detection.signals
+                );
             }
-        }, CONFIRMATION_WINDOW_MS);
-    }, []);
+        }, DETECTION_WINDOW_MS);
+    }, [autoDetectionEnabled, addCandidateQuestion]);
 
-    // Called when interviewer's VAD detects speech-end (silence after speaking)
+    // Called when interviewer's VAD detects speech-end
     const handleInterviewerSpeechEnd = useCallback(() => {
-        console.log('[Detection] Interviewer speech ended — starting confirmation window');
-
-        // Cancel any previous pending window
-        if (autoGenerateTimeoutRef.current) {
-            clearTimeout(autoGenerateTimeoutRef.current);
-            autoGenerateTimeoutRef.current = null;
+        console.log('[Detection] Interviewer speech ended — starting detection window');
+        if (autoDetectTimeoutRef.current) {
+            clearTimeout(autoDetectTimeoutRef.current);
+            autoDetectTimeoutRef.current = null;
         }
+        startDetectionWindow();
+    }, [startDetectionWindow]);
 
-        startConfirmationWindow();
-    }, [startConfirmationWindow]);
-
-    // Called when interviewer's VAD detects speech-start (they resumed speaking)
+    // Called when interviewer's VAD detects speech-start (resumed speaking)
     const handleInterviewerSpeechStart = useCallback(() => {
-        if (autoGenerateTimeoutRef.current) {
-            console.log('[Detection] Interviewer resumed speaking — cancelling confirmation window');
-            clearTimeout(autoGenerateTimeoutRef.current);
-            autoGenerateTimeoutRef.current = null;
+        if (autoDetectTimeoutRef.current) {
+            console.log('[Detection] Interviewer resumed speaking — cancelling detection window');
+            clearTimeout(autoDetectTimeoutRef.current);
+            autoDetectTimeoutRef.current = null;
         }
     }, []);
 
@@ -264,11 +269,127 @@ function App(): JSX.Element {
         void processTranscriptionQueue();
     }, [isModelLoaded, processTranscriptionQueue]);
 
-    const { startRecording, stopRecording, clearChunks } = useMixedAudioRecorder(
+    const { startRecording, stopRecording, clearChunks, audioLevels } = useMixedAudioRecorder(
         handleAudioChunk,
         handleInterviewerSpeechEnd,
         handleInterviewerSpeechStart
     );
+
+    // ─── Answer style definitions ───
+    const ANSWER_STYLES: { style: AnswerOption['style']; styleLabel: string; promptSuffix: string }[] = [
+        {
+            style: 'strategic',
+            styleLabel: 'Focused/Strategic',
+            promptSuffix: '\n\nApproach: Give a focused, strategic answer. Lead with the high-level approach, mention key decisions and trade-offs. Be concise and executive-level.',
+        },
+        {
+            style: 'technological',
+            styleLabel: 'Technological',
+            promptSuffix: '\n\nApproach: Give a technical, implementation-focused answer. Mention specific technologies, tools, frameworks, and patterns. Include concrete technical details.',
+        },
+        {
+            style: 'process-driven',
+            styleLabel: 'Process-Driven',
+            promptSuffix: '\n\nApproach: Give a process-driven, methodical answer. Focus on monitoring, workflows, CI/CD, best practices, and systematic approaches. Emphasize repeatability and reliability.',
+        },
+    ];
+
+    // ─── User picks a candidate question → generate 3 answer options ───
+    const handlePickQuestion = async (candidateId: string, questionText: string) => {
+        // Mark the candidate as "answering"
+        setCandidateStatus(candidateId, 'answering');
+
+        const recentBlocks = conversationRef.current.slice(-5);
+        const contextTranscript = recentBlocks.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
+
+        const settingsRes = await window.electronAPI.getSettings();
+        let interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
+
+        const detected = classifyQuestion(contextTranscript);
+        if (detected !== 'general') {
+            interviewType = detected;
+        }
+
+        const questionId = Date.now().toString();
+        const options: AnswerOption[] = ANSWER_STYLES.map((s, idx) => ({
+            id: `${questionId}-opt-${idx}`,
+            style: s.style,
+            styleLabel: s.styleLabel,
+            answer: '',
+            isStreaming: true,
+        }));
+
+        const newQuestion: DetectedQuestion = {
+            id: questionId,
+            questionText: questionText,
+            timestamp: new Date(),
+            interviewType,
+            options,
+            isGenerating: true,
+        };
+
+        addDetectedQuestion(newQuestion);
+        setExpanded(true);
+
+        // Remove from candidates list (it's now being answered)
+        removeCandidateQuestion(candidateId);
+
+        // Generate all 3 options in parallel
+        const generateOption = async (optionIndex: number) => {
+            const style = ANSWER_STYLES[optionIndex];
+            const optionId = options[optionIndex].id;
+
+            try {
+                let streamedAnswer = '';
+
+                await generateAnswerWithTemplate(
+                    {
+                        interviewType: interviewType as any,
+                        currentQuestion: contextTranscript + style.promptSuffix,
+                        conversationHistory: '',
+                        resume: profile.resume,
+                        jobDescription: profile.jobDescription,
+                        company: profile.targetCompany,
+                        useBulletPoints,
+                    },
+                    (chunk) => {
+                        streamedAnswer += chunk;
+                        updateQuestionOption(questionId, optionId, {
+                            answer: streamedAnswer,
+                            isStreaming: true,
+                        });
+                    }
+                );
+
+                updateQuestionOption(questionId, optionId, { isStreaming: false });
+            } catch (error) {
+                console.error(`Failed to generate option ${optionIndex}:`, error);
+                updateQuestionOption(questionId, optionId, {
+                    answer: 'Failed to generate answer.',
+                    isStreaming: false,
+                });
+            }
+        };
+
+        await Promise.all([
+            generateOption(0),
+            generateOption(1),
+            generateOption(2),
+        ]);
+
+        setQuestionGenerating(questionId, false);
+    };
+
+    // ─── Manual generate (Ctrl+Shift+G) → add as candidate for the user to pick ───
+    const handleGenerateAnswer = async () => {
+        const lastInterviewerBlock = [...conversationRef.current].reverse().find(b => b.speaker === 'interviewer');
+        const questionText = lastInterviewerBlock?.text || '';
+        if (!questionText.trim()) return;
+
+        // Directly pick this question (skip the candidate step)
+        const candidateId = 'manual-' + Date.now();
+        await handlePickQuestion(candidateId, questionText);
+    };
 
     // ─── Action handlers ───
 
@@ -276,13 +397,13 @@ function App(): JSX.Element {
         if (isRecording) {
             stopRecording();
             setIsRecording(false);
-            if (autoGenerateTimeoutRef.current) {
-                clearTimeout(autoGenerateTimeoutRef.current);
-                autoGenerateTimeoutRef.current = null;
+            if (autoDetectTimeoutRef.current) {
+                clearTimeout(autoDetectTimeoutRef.current);
+                autoDetectTimeoutRef.current = null;
             }
 
-            // Phase 2.4/3.2: Auto-save session with metrics on stop
-            if (conversationRef.current.length > 0 || answers.length > 0) {
+            // Auto-save session
+            if (conversationRef.current.length > 0) {
                 try {
                     const metrics = analyzeDelivery(conversationRef.current, sessionTime);
                     const now = new Date().toISOString();
@@ -294,10 +415,11 @@ function App(): JSX.Element {
                         duration: sessionTime,
                         interviewType: 'general',
                         type: 'general',
-                        questionCount: answers.length,
+                        questionCount: detectedQuestions.length + candidateQuestions.length,
                         conversation: conversationRef.current,
                         transcript: conversationRef.current,
                         answers: answers,
+                        detectedQuestions: detectedQuestions,
                         metrics: metrics,
                         deliveryMetrics: metrics,
                     };
@@ -322,6 +444,8 @@ function App(): JSX.Element {
                 clearTranscript();
                 conversationRef.current = [];
                 clearChunks();
+                clearCandidateQuestions();
+                clearDetectedQuestions();
                 await startRecording();
                 setIsRecording(true);
             } catch (error) {
@@ -330,139 +454,10 @@ function App(): JSX.Element {
         }
     };
 
-    const handleGenerateAnswer = async () => {
-        const fullTranscript = conversationRef.current.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
-        if (!fullTranscript.trim()) return;
-
-        lastAnswerTimeRef.current = Date.now();
-
-        // Fetch current settings to get interviewType and detection mode
-        const settingsRes = await window.electronAPI.getSettings();
-        let interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
-        const isAutoDetect = settingsRes.success && settingsRes.settings ? settingsRes.settings.questionDetectionMode !== 'manual' : true;
-
-        if (isAutoDetect) {
-            const detected = classifyQuestion(fullTranscript);
-            if (detected !== 'general') {
-                interviewType = detected;
-            }
-        }
-
-        const newAnswer: Answer = {
-            id: Date.now().toString(),
-            source: 'transcript',
-            question: fullTranscript,
-            answer: '',
-            timestamp: new Date(),
-            isStreaming: true,
-            detectedType: interviewType,
-        };
-
-        addAnswer(newAnswer);
-        setExpanded(true);
-
-        try {
-            let streamedAnswer = '';
-            
-            await generateAnswerWithTemplate(
-                {
-                    interviewType: interviewType as any,
-                    currentQuestion: fullTranscript,
-                    conversationHistory: '', // Only fullTranscript needed for now since it contains the whole history
-                    resume: profile.resume,
-                    jobDescription: profile.jobDescription,
-                    company: profile.targetCompany,
-                    useBulletPoints,
-                },
-                (chunk) => {
-                    streamedAnswer += chunk;
-                    updateAnswer(newAnswer.id, { answer: streamedAnswer, isStreaming: true });
-                }
-            );
-            updateAnswer(newAnswer.id, { isStreaming: false });
-
-            // Phase 2.5: Predict Follow-ups asynchronously
-            predictFollowUps(fullTranscript, streamedAnswer, interviewType as any).then(followUps => {
-                if (followUps.length > 0) {
-                    updateAnswer(newAnswer.id, { followUps });
-                }
-            }).catch(err => console.error("Failed to predict follow-ups:", err));
-
-        } catch (error) {
-            console.error('Failed to generate answer:', error);
-            removeAnswer(newAnswer.id);
-        }
-    };
-
-    const triggerAutoAnswer = () => {
-        const recentBlocks = conversationRef.current.slice(-5);
-        const autoTranscript = recentBlocks.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
-        if (!autoTranscript.trim()) return;
-
-        (async () => {
-            const settingsRes = await window.electronAPI.getSettings();
-            let interviewType = settingsRes.success && settingsRes.settings ? settingsRes.settings.interviewType : 'general';
-            const isAutoDetect = settingsRes.success && settingsRes.settings ? settingsRes.settings.questionDetectionMode !== 'manual' : true;
-
-            if (isAutoDetect) {
-                const detected = classifyQuestion(autoTranscript);
-                if (detected !== 'general') {
-                    interviewType = detected;
-                }
-            }
-
-            const newAnswer: Answer = {
-                id: Date.now().toString(),
-                source: 'transcript',
-                question: autoTranscript,
-                answer: '',
-                timestamp: new Date(),
-                isStreaming: true,
-                detectedType: interviewType,
-            };
-
-            addAnswer(newAnswer);
-            setExpanded(true);
-
-            try {
-                let streamedAnswer = '';
-
-                await generateAnswerWithTemplate(
-                    {
-                        interviewType: interviewType as any,
-                        currentQuestion: autoTranscript,
-                        conversationHistory: '', // Included in autoTranscript
-                        resume: profile.resume,
-                        jobDescription: profile.jobDescription,
-                        company: profile.targetCompany,
-                        useBulletPoints,
-                    },
-                    (chunk) => {
-                        streamedAnswer += chunk;
-                        updateAnswer(newAnswer.id, { answer: streamedAnswer, isStreaming: true });
-                    }
-                );
-                updateAnswer(newAnswer.id, { isStreaming: false });
-
-                // Phase 2.5: Predict Follow-ups asynchronously
-                predictFollowUps(autoTranscript, streamedAnswer, interviewType as any).then(followUps => {
-                    if (followUps.length > 0) {
-                        updateAnswer(newAnswer.id, { followUps });
-                    }
-                }).catch(err => console.error("Failed to predict follow-ups:", err));
-
-            } catch (error) {
-                console.error('Failed to auto-generate answer:', error);
-                removeAnswer(newAnswer.id);
-            }
-        })();
-    };
-
     const handleCaptureScreen = async () => {
         setCapturing(true);
         try {
             if (isCodeMode) {
-                // Code Mode: capture screen then stream analysis with code-specific prompt
                 const captureResult = await window.electronAPI.captureScreen();
                 if (!captureResult.success || !captureResult.imageData) {
                     console.error('Screen capture failed:', captureResult.error);
@@ -500,7 +495,6 @@ function App(): JSX.Element {
                 updateAnswer(newAnswer.id, { isStreaming: false });
 
             } else {
-                // Standard mode: one-shot capture + analyze
                 const result = await window.electronAPI.captureAndAnalyze();
                 if (result.success && result.answer) {
                     addAnswer({
@@ -528,14 +522,23 @@ function App(): JSX.Element {
         interviewerStabilizerRef.current.clear();
         clearTranscript();
         conversationRef.current = [];
-        if (autoGenerateTimeoutRef.current) {
-            clearTimeout(autoGenerateTimeoutRef.current);
-            autoGenerateTimeoutRef.current = null;
+        if (autoDetectTimeoutRef.current) {
+            clearTimeout(autoDetectTimeoutRef.current);
+            autoDetectTimeoutRef.current = null;
         }
     };
 
     const handleClose = () => {
         window.electronAPI?.quitApp();
+    };
+
+    const handleToggleAutoDetection = () => {
+        setAutoDetectionEnabled(prev => !prev);
+    };
+
+    const handleClearAll = () => {
+        clearCandidateQuestions();
+        clearDetectedQuestions();
     };
 
     // ─── Global keyboard shortcuts ───
@@ -563,7 +566,6 @@ function App(): JSX.Element {
                     handleToggleRecording();
                 })
             );
-            // Region capture shortcut
             unsubscribers.push(
                 window.electronAPI.onShortcut('shortcut:region-capture', () => {
                     handleRegionCapture();
@@ -579,12 +581,20 @@ function App(): JSX.Element {
     const handleSettingsChanged = async () => {
         try {
             await loadModel(true);
+            // Refresh preferences
+            const settingsRes = await window.electronAPI.getSettings();
+            if (settingsRes.success && settingsRes.settings) {
+                const mode = settingsRes.settings.questionDetectionMode || 'heuristic';
+                setAutoDetectionEnabled(mode !== 'manual');
+                const engine = settingsRes.settings.sttEngine || 'whisper';
+                setSttEngine(engine === 'moonshine' ? 'Moonshine' : 'Whisper.cpp');
+            }
         } catch (error) {
             console.error('Failed to reload model after settings change:', error);
         }
     };
 
-    // ─── Region Capture State ───
+    // ─── Region Capture ───
     const [regionSelectState, setRegionSelectState] = useState<{ screenshotData: string } | null>(null);
 
     const handleRegionCapture = async () => {
@@ -619,7 +629,6 @@ function App(): JSX.Element {
             setExpanded(true);
 
             let streamedAnswer = '';
-            const systemPrompt = prompt?.system || 'You are an expert interview assistant. Analyze the selected region from a screenshot and provide clear, structured insight.';
             const userPrompt = prompt?.user || 'Analyze this screenshot region. Extract questions, code, or information and provide a helpful response.';
 
             await generateResponse(
@@ -653,24 +662,31 @@ function App(): JSX.Element {
                 isGenerating={isGenerating}
                 sessionTime={sessionTime}
                 conversation={conversation}
-                answers={answers}
-                currentAnswerIndex={currentAnswerIndex}
                 isModelLoading={isModelLoading}
                 modelError={modelError}
+                candidateQuestions={candidateQuestions}
+                detectedQuestions={detectedQuestions}
+                expandedQuestionId={expandedQuestionId}
+                autoDetectionEnabled={autoDetectionEnabled}
+                sttEngine={sttEngine}
+                audioLevels={audioLevels}
                 onToggleExpanded={toggleExpanded}
                 onToggleRecording={handleToggleRecording}
                 onCaptureScreen={handleCaptureScreen}
                 onRegionCapture={handleRegionCapture}
                 onGenerateAnswer={handleGenerateAnswer}
                 onClearTranscript={handleClearTranscript}
-                onClearAnswers={clearAnswers}
-                onNavigateAnswer={navigateAnswer}
                 onToggleSettings={toggleSettings}
                 onToggleChat={toggleChat}
                 onToggleHistory={toggleHistory}
                 onTogglePractice={togglePractice}
                 onSettingsChanged={handleSettingsChanged}
                 onClose={handleClose}
+                onPickQuestion={handlePickQuestion}
+                onDismissCandidate={removeCandidateQuestion}
+                onSelectOption={selectOption}
+                onClearDetectedQuestions={handleClearAll}
+                onToggleAutoDetection={handleToggleAutoDetection}
             />
             {regionSelectState && (
                 <RegionSelector

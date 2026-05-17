@@ -62,6 +62,7 @@ interface ElectronAPI {
     getSettings: () => Promise<{ success: boolean; settings?: any; error?: string }>;
     updateSettings: (settings: any) => Promise<{ success: boolean; settings?: any; error?: string }>;
     getAvailableModels: () => Promise<{ success: boolean; models?: string[]; error?: string }>;
+    downloadMoonshineModel: (modelName: string) => Promise<{ success: boolean; error?: string }>;
     checkSttServer: (engine: 'whisper' | 'moonshine') => Promise<{ exists: boolean; error?: string }>;
     testOllama: () => Promise<{ success: boolean; message?: string; error?: string }>;
     

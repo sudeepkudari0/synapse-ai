@@ -1,14 +1,15 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
-import { AnswerPanel } from './AnswerPanel';
+import { AnswerSuggestions } from './AnswerSuggestions';
 import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import { ChatPanel } from '../ChatPanel/ChatPanel';
 import { SessionHistory } from '../SessionHistory/SessionHistory';
 import { SessionDetail } from '../SessionHistory/SessionDetail';
 import { PracticeMode } from '../PracticeMode/PracticeMode';
 import { MetricsBar } from '../DeliveryMetrics/MetricsBar';
-import type { ChatBlock, Answer } from '../../state';
+import { Shield } from 'lucide-react';
+import type { ChatBlock, DetectedQuestion, CandidateQuestion } from '../../state';
 import './FloatingWidget.css';
 
 interface FloatingWidgetProps {
@@ -23,10 +24,16 @@ interface FloatingWidgetProps {
     isGenerating: boolean;
     sessionTime: number;
     conversation: ChatBlock[];
-    answers: Answer[];
-    currentAnswerIndex: number;
     isModelLoading: boolean;
     modelError: string;
+
+    // New: Question detection model
+    candidateQuestions: CandidateQuestion[];
+    detectedQuestions: DetectedQuestion[];
+    expandedQuestionId: string | null;
+    autoDetectionEnabled: boolean;
+    sttEngine: string;
+    audioLevels: { mic: number; system: number };
 
     // Actions
     onToggleExpanded: () => void;
@@ -35,14 +42,19 @@ interface FloatingWidgetProps {
     onRegionCapture: () => void;
     onGenerateAnswer: () => void;
     onClearTranscript: () => void;
-    onClearAnswers: () => void;
-    onNavigateAnswer: (index: number) => void;
     onToggleSettings: () => void;
     onToggleChat: () => void;
     onToggleHistory: () => void;
     onTogglePractice: () => void;
     onSettingsChanged: () => void;
     onClose: () => void;
+
+    // New actions
+    onPickQuestion: (candidateId: string, questionText: string) => void;
+    onDismissCandidate: (candidateId: string) => void;
+    onSelectOption: (questionId: string, optionId: string) => void;
+    onClearDetectedQuestions: () => void;
+    onToggleAutoDetection: () => void;
 }
 
 export function FloatingWidget({
@@ -56,27 +68,34 @@ export function FloatingWidget({
     isGenerating,
     sessionTime,
     conversation,
-    answers,
-    currentAnswerIndex,
     isModelLoading,
     modelError,
+    candidateQuestions,
+    detectedQuestions,
+    expandedQuestionId,
+    autoDetectionEnabled,
+    sttEngine,
+    audioLevels,
     onToggleExpanded,
     onToggleRecording,
     onCaptureScreen,
     onRegionCapture,
     onGenerateAnswer,
     onClearTranscript,
-    onClearAnswers,
-    onNavigateAnswer,
     onToggleSettings,
     onToggleChat,
     onToggleHistory,
     onTogglePractice,
     onSettingsChanged,
     onClose,
+    onPickQuestion,
+    onDismissCandidate,
+    onSelectOption,
+    onClearDetectedQuestions,
+    onToggleAutoDetection,
 }: FloatingWidgetProps) {
     const widgetRef = useRef<HTMLDivElement>(null);
-    const prevAnswerCount = useRef(answers.length);
+    const prevCandidateCount = useRef(candidateQuestions.length);
     const [selectedSession, setSelectedSession] = useState<any>(null);
 
     // ─── Widget CSS position (for drag) ───
@@ -108,8 +127,6 @@ export function FloatingWidget({
     };
 
     // ─── Click-through management ───
-    // Widget-level: when mouse enters the widget container, disable click-through.
-    // When mouse leaves, re-enable click-through so transparent areas pass clicks.
     useEffect(() => {
         const el = widgetRef.current;
         if (!el) return;
@@ -130,16 +147,21 @@ export function FloatingWidget({
         };
     }, []);
 
-    // Auto-expand when answers arrive
+    // Auto-expand when new candidate questions arrive
     useEffect(() => {
-        if (answers.length > prevAnswerCount.current) {
-            // New answer arrived — expand widget
+        if (candidateQuestions.length > prevCandidateCount.current) {
             if (!isExpanded) {
                 onToggleExpanded();
             }
         }
-        prevAnswerCount.current = answers.length;
-    }, [answers.length, isExpanded, onToggleExpanded]);
+        prevCandidateCount.current = candidateQuestions.length;
+    }, [candidateQuestions.length, isExpanded, onToggleExpanded]);
+
+    const isFullPagePanel = isSettingsOpen || isChatOpen || isHistoryOpen || isPracticeOpen;
+
+    const handleClearAll = () => {
+        onClearDetectedQuestions();
+    };
 
     return (
         <div className="fixed top-0 right-0 w-full h-full pointer-events-none select-none z-50">
@@ -172,65 +194,100 @@ export function FloatingWidget({
 
                 {/* Expandable content */}
                 <div className="widget-body">
-                    {/* Settings/Chat/History/Practice Panels override other content when open */}
-                    {isSettingsOpen ? (
-                        <SettingsPanel 
-                            onClose={onToggleSettings} 
-                            onSettingsChanged={onSettingsChanged} 
-                        />
-                    ) : isChatOpen ? (
-                        <ChatPanel onClose={onToggleChat} />
-                    ) : isHistoryOpen ? (
-                        selectedSession ? (
-                            <SessionDetail 
-                                session={selectedSession} 
-                                onClose={onToggleHistory} 
-                                onBack={() => setSelectedSession(null)} 
-                            />
-                        ) : (
-                            <SessionHistory 
-                                onClose={onToggleHistory} 
-                                onLoadSession={handleLoadSession} 
-                            />
-                        )
-                    ) : isPracticeOpen ? (
-                        <PracticeMode />
+                    {isFullPagePanel ? (
+                        <>
+                            {isSettingsOpen ? (
+                                <SettingsPanel 
+                                    onClose={onToggleSettings} 
+                                    onSettingsChanged={onSettingsChanged} 
+                                />
+                            ) : isChatOpen ? (
+                                <ChatPanel onClose={onToggleChat} />
+                            ) : isHistoryOpen ? (
+                                selectedSession ? (
+                                    <SessionDetail 
+                                        session={selectedSession} 
+                                        onClose={onToggleHistory} 
+                                        onBack={() => setSelectedSession(null)} 
+                                    />
+                                ) : (
+                                    <SessionHistory 
+                                        onClose={onToggleHistory} 
+                                        onLoadSession={handleLoadSession} 
+                                    />
+                                )
+                            ) : isPracticeOpen ? (
+                                <PracticeMode />
+                            ) : null}
+                        </>
                     ) : (
                         <>
                             {/* Loading indicator */}
                             {isModelLoading && (
-                                <div className="px-4 py-3 border-t border-[var(--border-subtle)] animate-slide-up">
+                                <div className="px-4 py-3 border-b border-[var(--border-subtle)] animate-slide-up">
                                     <div className="flex items-center gap-2">
                                         <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-pulse" />
-                                        <span className="text-xs text-[var(--text-secondary)]">Loading Whisper model...</span>
+                                        <span className="text-xs text-[var(--text-secondary)]">Loading STT model...</span>
                                     </div>
                                 </div>
                             )}
 
                             {/* Error display */}
                             {modelError && (
-                                <div className="px-4 py-3 border-t border-[var(--border-subtle)] animate-slide-up">
+                                <div className="px-4 py-3 border-b border-[var(--border-subtle)] animate-slide-up">
                                     <div className="px-3 py-2 rounded-lg bg-[var(--accent-red-dim)] border border-[var(--accent-red)]/20">
                                         <p className="text-xs text-[var(--accent-red)]">{modelError}</p>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Transcript panel */}
-                            <TranscriptPanel
-                                conversation={conversation}
-                                onClear={onClearTranscript}
-                            />
+                            {/* ═══ Split Panel Layout ═══ */}
+                            <div className="split-layout">
+                                {/* Left: Transcript */}
+                                <div className="split-layout__left">
+                                    <TranscriptPanel
+                                        conversation={conversation}
+                                        onClear={onClearTranscript}
+                                        isRecording={isRecording}
+                                        sttEngine={sttEngine}
+                                        audioLevels={audioLevels}
+                                    />
+                                </div>
 
-                            {/* Answer panel */}
-                            {answers.length > 0 && (
-                                <AnswerPanel
-                                    answers={answers}
-                                    currentIndex={currentAnswerIndex}
-                                    onNavigate={onNavigateAnswer}
-                                    onClear={onClearAnswers}
-                                />
-                            )}
+                                {/* Right: Answer Suggestions */}
+                                <div className="split-layout__right">
+                                    <AnswerSuggestions
+                                        candidateQuestions={candidateQuestions}
+                                        detectedQuestions={detectedQuestions}
+                                        expandedQuestionId={expandedQuestionId}
+                                        onPickQuestion={onPickQuestion}
+                                        onDismissCandidate={onDismissCandidate}
+                                        onSelectOption={onSelectOption}
+                                        onClearAll={handleClearAll}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* ═══ Bottom Bar ═══ */}
+                            <div className="widget-bottom-bar">
+                                <div className="privacy-badge">
+                                    <Shield className="w-3 h-3" />
+                                    <span>Privacy First (Local Only)</span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-zinc-400 font-medium">
+                                        Auto Question Detection
+                                    </span>
+                                    <button
+                                        onClick={onToggleAutoDetection}
+                                        className={`toggle-switch ${autoDetectionEnabled ? 'toggle-switch--active' : ''}`}
+                                        title="Toggle auto question detection"
+                                    >
+                                        <div className="toggle-switch__knob" />
+                                    </button>
+                                </div>
+                            </div>
 
                             {/* Delivery Metrics Bar */}
                             <MetricsBar 
@@ -246,5 +303,4 @@ export function FloatingWidget({
     );
 }
 
-// Re-export Answer type for convenience
 export type { Answer } from '../../state';

@@ -4,6 +4,7 @@ import { IPC_CHANNELS } from '../types/ipc';
 import { BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { spawn } from 'child_process';
 
 export function registerIPCHandlers(): void {
 
@@ -80,6 +81,49 @@ export function registerIPCHandlers(): void {
                 fs.unlink(destPath, () => {}); // Delete temp file
                 resolve({ success: false, error: err.message });
             }
+        });
+    });
+
+    // Download Moonshine model
+    ipcMain.handle(IPC_CHANNELS.DOWNLOAD_MOONSHINE_MODEL, async (event, modelName: string) => {
+        return new Promise((resolve) => {
+            const exeName = 'moonshine-server.exe';
+            let serverExePath: string;
+            
+            if (app.isPackaged) {
+                serverExePath = path.join(process.resourcesPath, 'whisper', exeName);
+            } else {
+                serverExePath = path.join(app.getAppPath(), 'native', 'whisper', exeName);
+            }
+            
+            if (!fs.existsSync(serverExePath)) {
+                resolve({ success: false, error: 'Moonshine server executable not found. Please build it first.' });
+                return;
+            }
+
+            const proc = spawn(serverExePath, [], {
+                cwd: path.dirname(serverExePath),
+                windowsHide: true,
+                env: { ...process.env, MOONSHINE_DOWNLOAD_ONLY: modelName }
+            });
+
+            let errorOutput = '';
+
+            proc.stderr.on('data', (data) => {
+                errorOutput += data.toString();
+            });
+
+            proc.on('close', (code) => {
+                if (code === 0) {
+                    resolve({ success: true });
+                } else {
+                    resolve({ success: false, error: `Failed to download: ${errorOutput}` });
+                }
+            });
+
+            proc.on('error', (err) => {
+                resolve({ success: false, error: err.message });
+            });
         });
     });
 

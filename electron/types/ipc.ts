@@ -70,6 +70,7 @@ export const IPC_CHANNELS = {
     TEST_OLLAMA: 'ollama:test',
     QUIT_APP: 'app:quit',
     DOWNLOAD_WHISPER_MODEL: 'whisper:download-model',
+    DOWNLOAD_MOONSHINE_MODEL: 'moonshine:download-model',
     // Session & Profile Storage
     SESSION_SAVE: 'session:save',
     SESSION_LOAD: 'session:load',
