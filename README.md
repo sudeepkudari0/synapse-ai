@@ -9,13 +9,14 @@ Synapse AI is a privacy-first, offline AI interview assistant that provides real
 
 ## ✨ Features
 
-- 🎤 **Local Speech Recognition** - Real-time transcription using Whisper.cpp (100% offline).
-- 🤖 **AI Answer Generation** - Get professional interview answers using local LLMs via Ollama.
-- 🪟 **Glassmorphism Overlays** - Beautiful, transparent UI that stays out of your way but provides answers right when you need them.
-- 🎯 **Auto Question Detection** - Automatically detects when the interviewer stops talking to capture the context seamlessly.
-- 📝 **Q&A History** - Navigate through multiple interview questions and your AI-generated answers.
-- ⏱️ **Session Timer** - Keep track of your interview duration.
-- 🎨 **Modern UI** - Sleek design with a backdrop blur and a focused dark theme.
+- 🎤 **Multiple STT Engines** - Real-time transcription using Whisper.cpp or Moonshine ONNX pipelines (100% offline).
+- 🧠 **Advanced VAD Pipeline** - Utterance-based transcription with Voice Activity Detection and energy-based pre-filtering to eliminate hallucinations.
+- 🤖 **AI Answer Generation** - Professional interview answers using local LLMs via Ollama, featuring STAR-structured formatting and markdown rendering.
+- 📊 **Live Delivery Analytics** - Real-time tracking of filler words, pacing (WPM), and talk-time ratio via a non-intrusive MetricsBar.
+- 🎯 **Interactive Question Detection** - Real-time question surfacing with deduplication, letting you select the exact question before generating answers.
+- 🪟 **Resizable Glassmorphism Overlays** - Beautiful, edge-resizable transparent UI that provides answers right when you need them.
+- 🎓 **Practice Mode & Export** - Multi-dimensional scoring, ESL-friendly prompt support, and comprehensive session data export.
+- ⏱️ **Session Management** - Visual audio waveforms, Q&A history navigation, and active session timers.
 - 🔒 **Privacy First** - Everything runs locally. No cloud dependencies. No data leaves your machine.
 
 ## 🏗️ Project Structure
@@ -39,7 +40,7 @@ synapse-ai/
 │
 ├── e2e/                      # Playwright End-to-End tests
 │
-└── models/                   # Local Whisper models (auto-downloaded)
+└── models/                   # Local STT models (Whisper/Moonshine auto-downloaded)
 ```
 
 ## 🚀 Getting Started
@@ -75,18 +76,19 @@ bun run dev
 
 ### 🧠 Setting up Local AI Models
 
-1. **Speech Recognition (Whisper):**
-   The required whisper models can be downloaded from the Settings Panel inside the app, or manually using the setup script:
+1. **Speech Recognition (Whisper & Moonshine):**
+   The required STT models can be downloaded directly from the Settings Panel inside the app. The application automatically manages downloading and switching between Whisper and Moonshine engines. Alternatively, you can use the setup script:
    ```bash
    bun run setup:whisper
    ```
+   *Note: Moonshine models are highly optimized and run seamlessly via the integrated ONNX pipeline sidecar.*
 
 2. **LLM Answers (Ollama):**
-   Make sure you have Ollama installed and running. Pull your preferred model (e.g., `qwen3-vl:2b` or `llama3`):
+   Make sure you have Ollama installed and running. Pull your preferred model (e.g., `qwen2.5:0.5b` or `llama3`):
    ```bash
-   ollama run qwen3-vl:2b
+   ollama run qwen2.5:0.5b
    ```
-   You can configure the model name inside the Synapse AI Settings panel.
+   You can configure the model name and customize the response style (e.g., enabling "Bullet Points" mode) inside the Synapse AI Settings panel.
 
 ## 🧪 Testing
 
@@ -108,9 +110,9 @@ See the [E2E Testing Guide](./e2e/README.md) for more detailed information.
 ## 🛠️ Architecture
 
 ### Main Process (Electron)
-- **Whisper Integration** - Native transcription executed securely in the main process.
-- **Window Management** - Advanced overlay configuration, transparent window management, and screen privacy features.
-- **IPC Handlers** - Type-safe, high-performance communication with the renderer process.
+- **STT Integrations** - Robust transcription using native Whisper.cpp wrappers and Moonshine sidecars managed efficiently by the main process.
+- **Window Management** - Advanced resizable overlay configuration, transparent boundary management, and screen privacy features.
+- **IPC Handlers** - Type-safe, high-performance communication with the renderer process for state and settings persistence.
 
 ### Renderer Process (React)
 - **Component Architecture** - Modular, reusable UI using Tailwind CSS and shadcn/ui components.
