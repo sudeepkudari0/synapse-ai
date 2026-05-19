@@ -12,6 +12,8 @@ export interface AppSettings {
     deepgramModel: string;
     geminiApiKey: string;
     groqApiKey: string;
+    geminiModel: string;
+    groqModel: string;
     useOllamaOnly: boolean;
     ollamaModel: string;
     ollamaBaseUrl: string;
@@ -24,7 +26,7 @@ export interface AppSettings {
     sttMode: 'vad' | 'chunks';
 }
 
-const CURRENT_VERSION = 10;
+const CURRENT_VERSION = 11;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
@@ -36,6 +38,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     deepgramModel: 'nova-3',
     geminiApiKey: '',
     groqApiKey: '',
+    geminiModel: 'gemini-2.0-flash',
+    groqModel: 'llama-3.3-70b-versatile',
     useOllamaOnly: false,
     ollamaModel: 'qwen3-vl:2b',
     ollamaBaseUrl: 'http://localhost:11434/v1',
@@ -123,6 +127,15 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             ...settings,
             sttMode: 'vad',
             version: 10,
+        };
+    },
+    10: (settings: any) => {
+        // v10 -> v11: Add geminiModel and groqModel
+        return {
+            ...settings,
+            geminiModel: 'gemini-2.0-flash',
+            groqModel: 'llama-3.3-70b-versatile',
+            version: 11,
         };
     },
 };

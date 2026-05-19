@@ -46,7 +46,7 @@ export class LLMService {
     // Default models
     private static readonly DEFAULT_MODELS = {
         gemini: 'gemini-2.0-flash', // Supports vision
-        groq: 'llama-4-scout-17b-16e-instruct', // Supports vision
+        groq: 'llama-3.3-70b-versatile', // Highly accurate model
         ollama: 'qwen3-vl:2b', // Default local model
     };
 
@@ -68,8 +68,8 @@ export class LLMService {
         this.config = {
             geminiApiKey: geminiApiKey || '',
             groqApiKey: groqApiKey || '',
-            geminiModel: process.env.GEMINI_MODEL || LLMService.DEFAULT_MODELS.gemini,
-            groqModel: process.env.GROQ_MODEL || LLMService.DEFAULT_MODELS.groq,
+            geminiModel: settings.geminiModel || process.env.GEMINI_MODEL || LLMService.DEFAULT_MODELS.gemini,
+            groqModel: settings.groqModel || process.env.GROQ_MODEL || LLMService.DEFAULT_MODELS.groq,
             ollamaModel: settings.ollamaModel || process.env.OLLAMA_MODEL || LLMService.DEFAULT_MODELS.ollama,
             ollamaBaseUrl: settings.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1',
             useOllamaOnly: settings.useOllamaOnly ?? false,
@@ -120,24 +120,38 @@ export class LLMService {
      * Non-streaming fallback mechanism
      */
     private async generateTextWithFallback(options: LLMOptions): Promise<string> {
-        try {
-            console.log(`[LLMService] Trying Ollama (${this.config.ollamaModel})...`);
+        if (this.config.useOllamaOnly) {
+            console.log(`[LLMService] useOllamaOnly is enabled. Trying Ollama (${this.config.ollamaModel})...`);
             return await this.generateOllama(options);
-        } catch (error) {
-            if (this.config.useOllamaOnly) {
-                console.error('[LLMService] Ollama failed and useOllamaOnly is enabled. Throwing error.');
-                throw error;
-            }
-            console.error('[LLMService] Ollama failed:', error, '- Falling back to Gemini...');
+        }
+
+        // Try Gemini first if key exists
+        if (this.geminiClient) {
             try {
-                if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
                 console.log('[LLMService] Trying Gemini...');
                 return await this.generateGemini(options);
-            } catch (error2) {
-                if (!this.groqClient) throw new Error("Both Gemini and Groq API keys are missing in settings");
-                console.error('[LLMService] Gemini failed:', error2, '- Falling back to Groq...');
-                return await this.generateGroq(options);
+            } catch (error) {
+                console.error('[LLMService] Gemini failed:', error, '- Falling back...');
             }
+        }
+
+        // Try Groq next if key exists
+        if (this.groqClient) {
+            try {
+                console.log('[LLMService] Trying Groq...');
+                return await this.generateGroq(options);
+            } catch (error) {
+                console.error('[LLMService] Groq failed:', error, '- Falling back to Ollama...');
+            }
+        }
+
+        // Ultimate fallback to Ollama
+        console.log(`[LLMService] Trying local Ollama fallback (${this.config.ollamaModel})...`);
+        try {
+            return await this.generateOllama(options);
+        } catch (error) {
+            console.error('[LLMService] Ollama fallback failed:', error);
+            throw new Error(`All LLM providers failed. Last error: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -145,64 +159,64 @@ export class LLMService {
      * Streaming fallback mechanism
      */
     private async *streamGenerateWithFallback(options: LLMOptions): AsyncIterable<string> {
-        try {
-            console.log(`[LLMService] Trying Ollama (Stream, ${this.config.ollamaModel})...`);
-            const stream = this.streamOllama(options);
-            const iterator = stream[Symbol.asyncIterator]();
-            let firstResult;
-
-            try {
-                firstResult = await iterator.next();
-            } catch (err) {
-                throw err;
-            }
-
-            if (!firstResult.done) {
-                yield firstResult.value;
-                while (true) {
-                    const result = await iterator.next();
-                    if (result.done) break;
-                    yield result.value;
-                }
-            }
+        if (this.config.useOllamaOnly) {
+            console.log(`[LLMService] useOllamaOnly is enabled. Trying Ollama Stream (${this.config.ollamaModel})...`);
+            yield* this.streamOllama(options);
             return;
-        } catch (error) {
-            if (this.config.useOllamaOnly) {
-                console.error('[LLMService] Ollama Stream failed and useOllamaOnly is enabled. Throwing error.');
-                throw error;
-            }
-            console.error('[LLMService] Ollama Stream failed:', error, '- Falling back to Gemini...');
         }
 
-        try {
-            if (!this.geminiClient) throw new Error("Gemini API key not set in settings");
-            console.log('[LLMService] Trying Gemini (Stream)...');
-            const stream = this.streamGemini(options);
-            const iterator = stream[Symbol.asyncIterator]();
-            let firstResult;
-
+        // 1. Try Gemini Stream first if key exists
+        if (this.geminiClient) {
             try {
-                firstResult = await iterator.next();
-            } catch (err) {
-                throw err;
-            }
+                console.log('[LLMService] Trying Gemini (Stream)...');
+                const stream = this.streamGemini(options);
+                const iterator = stream[Symbol.asyncIterator]();
+                let firstResult = await iterator.next();
 
-            if (!firstResult.done) {
-                yield firstResult.value;
-                while (true) {
-                    const result = await iterator.next();
-                    if (result.done) break;
-                    yield result.value;
+                if (!firstResult.done) {
+                    yield firstResult.value;
+                    while (true) {
+                        const result = await iterator.next();
+                        if (result.done) break;
+                        yield result.value;
+                    }
+                    return; // Stream succeeded, exit generator
                 }
+            } catch (error) {
+                console.error('[LLMService] Gemini Stream failed:', error, '- Falling back...');
             }
-            return;
-        } catch (error) {
-            console.error('[LLMService] Gemini Stream failed:', error, '- Falling back to Groq...');
         }
 
-        if (!this.groqClient) throw new Error("Both Gemini and Groq API keys are missing in settings");
-        console.log('[LLMService] Trying Groq (Stream)...');
-        yield* this.streamGroq(options);
+        // 2. Try Groq Stream next if key exists
+        if (this.groqClient) {
+            try {
+                console.log('[LLMService] Trying Groq (Stream)...');
+                const stream = this.streamGroq(options);
+                const iterator = stream[Symbol.asyncIterator]();
+                let firstResult = await iterator.next();
+
+                if (!firstResult.done) {
+                    yield firstResult.value;
+                    while (true) {
+                        const result = await iterator.next();
+                        if (result.done) break;
+                        yield result.value;
+                    }
+                    return; // Stream succeeded, exit generator
+                }
+            } catch (error) {
+                console.error('[LLMService] Groq Stream failed:', error, '- Falling back to Ollama...');
+            }
+        }
+
+        // 3. Ultimate fallback to Ollama Stream
+        console.log(`[LLMService] Trying local Ollama Stream fallback (${this.config.ollamaModel})...`);
+        try {
+            yield* this.streamOllama(options);
+        } catch (error) {
+            console.error('[LLMService] Ollama Stream fallback failed:', error);
+            throw new Error(`All LLM streaming providers failed. Last error: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     // ─── Gemini Implementation ───
@@ -481,6 +495,62 @@ export class LLMService {
                 throw new Error(`Ollama model "${this.config.ollamaModel}" not found. Please pull it first.`);
             }
             throw error;
+        }
+    }
+
+    /**
+     * Fetch available models for Gemini or Groq from their APIs.
+     * Falls back to a curated list if API keys are missing or requests fail.
+     */
+    async listModels(provider: 'gemini' | 'groq'): Promise<string[]> {
+        if (provider === 'gemini') {
+            const fallbackModels = [
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-2.0-flash-lite',
+                'gemini-1.5-flash',
+                'gemini-1.5-pro'
+            ];
+            if (!this.config.geminiApiKey) {
+                return fallbackModels;
+            }
+            try {
+                if (this.geminiClient && this.geminiClient.models && typeof this.geminiClient.models.list === 'function') {
+                    const response = await this.geminiClient.models.list() as any;
+                    if (response && Array.isArray(response.models)) {
+                        return response.models
+                            .map((m: any) => m.name ? m.name.replace(/^models\//, '') : String(m))
+                            .filter((name: string) => name.includes('gemini'));
+                    }
+                }
+                return fallbackModels;
+            } catch (error) {
+                console.error('[LLMService] Failed to fetch Gemini models from API, using fallback list:', error);
+                return fallbackModels;
+            }
+        } else {
+            const fallbackModels = [
+                'llama-3.3-70b-versatile',
+                'llama-3.1-8b-instant',
+                'llama-3.1-70b-versatile',
+                'mixtral-8x7b-32768',
+                'gemma2-9b-it'
+            ];
+            if (!this.config.groqApiKey) {
+                return fallbackModels;
+            }
+            try {
+                if (this.groqClient && this.groqClient.models && typeof this.groqClient.models.list === 'function') {
+                    const response = await this.groqClient.models.list();
+                    if (response && Array.isArray(response.data)) {
+                        return response.data.map((m: any) => m.id);
+                    }
+                }
+                return fallbackModels;
+            } catch (error) {
+                console.error('[LLMService] Failed to fetch Groq models from API, using fallback list:', error);
+                return fallbackModels;
+            }
         }
     }
 

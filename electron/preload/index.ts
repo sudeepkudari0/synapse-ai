@@ -157,6 +157,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return await ipcRenderer.invoke(IPC_CHANNELS.TEST_OLLAMA);
     },
 
+    llmGetAvailableModels: async (provider: 'gemini' | 'groq') => {
+        return await ipcRenderer.invoke('llm:get-available-models', provider);
+    },
+
     // Storage API
     session: {
         save: async (session: any) => ipcRenderer.invoke(IPC_CHANNELS.SESSION_SAVE, session),

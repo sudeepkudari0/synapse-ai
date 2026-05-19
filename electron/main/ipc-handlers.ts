@@ -293,6 +293,22 @@ export function registerIPCHandlers(): void {
         }
     });
 
+    // Fetch available Gemini & Groq models
+    ipcMain.handle('llm:get-available-models', async (event, provider: 'gemini' | 'groq') => {
+        try {
+            const { getLLMService } = await import('./llm/llm-service');
+            const llmService = getLLMService();
+            const models = await llmService.listModels(provider);
+            return { success: true, models };
+        } catch (error) {
+            console.error(`IPC: Failed to fetch ${provider} models:`, error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    });
+
     // Window: Set ignore mouse events (for click-through behavior)
     ipcMain.handle(IPC_CHANNELS.SET_IGNORE_MOUSE_EVENTS, async (event, ignore: boolean) => {
         try {

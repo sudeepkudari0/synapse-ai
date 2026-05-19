@@ -11,6 +11,15 @@ interface SettingsPanelProps {
 export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps) {
     const [activeTab, setActiveTab] = useState<'profile' | 'models' | 'api' | 'stories'>('profile');
     const [models, setModels] = useState<string[]>([]);
+    const [geminiModels, setGeminiModels] = useState<string[]>([]);
+    const [groqModels, setGroqModels] = useState<string[]>([]);
+    const [geminiVerified, setGeminiVerified] = useState(false);
+    const [groqVerified, setGroqVerified] = useState(false);
+    const [verifyingGemini, setVerifyingGemini] = useState(false);
+    const [verifyingGroq, setVerifyingGroq] = useState(false);
+    const [geminiVerificationError, setGeminiVerificationError] = useState<string | null>(null);
+    const [groqVerificationError, setGroqVerificationError] = useState<string | null>(null);
+
     const [settings, setSettings] = useState({
         sttEngine: 'moonshine' as 'whisper' | 'moonshine' | 'deepgram',
         sttMode: 'vad' as 'vad' | 'chunks',
@@ -21,6 +30,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         deepgramModel: 'nova-3',
         geminiApiKey: '',
         groqApiKey: '',
+        geminiModel: 'gemini-2.0-flash',
+        groqModel: 'llama-3.3-70b-versatile',
         useOllamaOnly: false,
         ollamaModel: 'qwen3-vl:2b',
         ollamaBaseUrl: 'http://localhost:11434/v1',
@@ -69,6 +80,84 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         window.electronAPI.checkSttServer(settings.sttEngine).then(res => setServerStatus(res));
     }, [settings.sttEngine]);
 
+    const handleApiKeyChange = (provider: 'gemini' | 'groq', val: string) => {
+        if (provider === 'gemini') {
+            setSettings(prev => ({ ...prev, geminiApiKey: val }));
+            setGeminiVerified(false);
+            setGeminiVerificationError(null);
+        } else {
+            setSettings(prev => ({ ...prev, groqApiKey: val }));
+            setGroqVerified(false);
+            setGroqVerificationError(null);
+        }
+    };
+
+    const handleVerifyKey = async (provider: 'gemini' | 'groq') => {
+        // Save current input value of api keys immediately so electron service uses them
+        try {
+            await window.electronAPI.updateSettings(settings);
+            onSettingsChanged();
+        } catch (err) {
+            console.error("Failed to update settings prior to key verification:", err);
+        }
+        await fetchCloudModels(provider, provider === 'gemini' ? settings.geminiApiKey : settings.groqApiKey, true);
+    };
+
+    const fetchCloudModels = async (provider: 'gemini' | 'groq', apiKey: string, showFeedback = false) => {
+        if (!apiKey) {
+            if (provider === 'gemini') {
+                setGeminiVerified(false);
+                setGeminiModels([]);
+            } else {
+                setGroqVerified(false);
+                setGroqModels([]);
+            }
+            return;
+        }
+
+        if (provider === 'gemini') {
+            setVerifyingGemini(true);
+            if (showFeedback) setGeminiVerificationError(null);
+        } else {
+            setVerifyingGroq(true);
+            if (showFeedback) setGroqVerificationError(null);
+        }
+
+        try {
+            const res = await window.electronAPI.llmGetAvailableModels(provider);
+            if (res.success && res.models) {
+                if (provider === 'gemini') {
+                    setGeminiModels(res.models);
+                    setGeminiVerified(true);
+                } else {
+                    setGroqModels(res.models);
+                    setGroqVerified(true);
+                }
+            } else {
+                throw new Error(res.error || `Failed to verify key with ${provider} API`);
+            }
+        } catch (err: any) {
+            console.error(`Failed to fetch ${provider} models:`, err);
+            if (provider === 'gemini') {
+                setGeminiVerified(false);
+                if (showFeedback) {
+                    setGeminiVerificationError(err.message || String(err));
+                }
+            } else {
+                setGroqVerified(false);
+                if (showFeedback) {
+                    setGroqVerificationError(err.message || String(err));
+                }
+            }
+        } finally {
+            if (provider === 'gemini') {
+                setVerifyingGemini(false);
+            } else {
+                setVerifyingGroq(false);
+            }
+        }
+    };
+
     const loadData = async () => {
         try {
             const modelsRes = await window.electronAPI.getAvailableModels();
@@ -78,23 +167,30 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
 
             const settingsRes = await window.electronAPI.getSettings();
             if (settingsRes.success && settingsRes.settings) {
+                const s = settingsRes.settings;
                 setSettings({
-                    sttEngine: settingsRes.settings.sttEngine || 'moonshine',
-                    sttMode: settingsRes.settings.sttMode || 'vad',
-                    whisperModel: settingsRes.settings.whisperModel || 'small.en',
-                    moonshineModel: settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING',
-                    downloadedMoonshineModels: settingsRes.settings.downloadedMoonshineModels || [],
-                    deepgramApiKey: settingsRes.settings.deepgramApiKey || '',
-                    deepgramModel: settingsRes.settings.deepgramModel || 'nova-3',
-                    geminiApiKey: settingsRes.settings.geminiApiKey || '',
-                    groqApiKey: settingsRes.settings.groqApiKey || '',
-                    useOllamaOnly: settingsRes.settings.useOllamaOnly || false,
-                    ollamaModel: settingsRes.settings.ollamaModel || 'qwen3-vl:2b',
-                    ollamaBaseUrl: settingsRes.settings.ollamaBaseUrl || 'http://localhost:11434/v1',
-                    interviewType: settingsRes.settings.interviewType || 'general',
-                    questionDetectionMode: settingsRes.settings.questionDetectionMode || 'hybrid',
-                    showDeliveryMetrics: settingsRes.settings.showDeliveryMetrics !== false
+                    sttEngine: s.sttEngine || 'moonshine',
+                    sttMode: s.sttMode || 'vad',
+                    whisperModel: s.whisperModel || 'small.en',
+                    moonshineModel: s.moonshineModel || 'MEDIUM_STREAMING',
+                    downloadedMoonshineModels: s.downloadedMoonshineModels || [],
+                    deepgramApiKey: s.deepgramApiKey || '',
+                    deepgramModel: s.deepgramModel || 'nova-3',
+                    geminiApiKey: s.geminiApiKey || '',
+                    groqApiKey: s.groqApiKey || '',
+                    geminiModel: s.geminiModel || 'gemini-2.0-flash',
+                    groqModel: s.groqModel || 'llama-3.3-70b-versatile',
+                    useOllamaOnly: s.useOllamaOnly || false,
+                    ollamaModel: s.ollamaModel || 'qwen3-vl:2b',
+                    ollamaBaseUrl: s.ollamaBaseUrl || 'http://localhost:11434/v1',
+                    interviewType: s.interviewType || 'general',
+                    questionDetectionMode: s.questionDetectionMode || 'hybrid',
+                    showDeliveryMetrics: s.showDeliveryMetrics !== false
                 });
+
+                // Fetch cloud models silently with loaded keys
+                fetchCloudModels('gemini', s.geminiApiKey, false);
+                fetchCloudModels('groq', s.groqApiKey, false);
             }
             // Mark initial load complete after state is set
             setTimeout(() => { isInitialLoadRef.current = false; }, 100);
@@ -570,28 +666,112 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-zinc-300 mb-1">
-                                    Gemini API Key
+                                <label className="block text-sm font-medium text-zinc-300 mb-1 flex items-center justify-between">
+                                    <span>Gemini API Key</span>
+                                    {geminiVerified && (
+                                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
+                                            ✓ Verified
+                                        </span>
+                                    )}
                                 </label>
-                                <input
-                                    type="password"
-                                    value={settings.geminiApiKey}
-                                    onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value })}
-                                    placeholder="AIza..."
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="password"
+                                        value={settings.geminiApiKey}
+                                        onChange={(e) => handleApiKeyChange('gemini', e.target.value)}
+                                        placeholder="AIza..."
+                                        className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                    />
+                                    {settings.geminiApiKey && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleVerifyKey('gemini')}
+                                            disabled={verifyingGemini}
+                                            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center justify-center min-w-[80px] ${
+                                                geminiVerified
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                                            }`}
+                                        >
+                                            {verifyingGemini ? 'Testing...' : geminiVerified ? 'Verified' : 'Verify'}
+                                        </button>
+                                    )}
+                                </div>
+                                {geminiVerificationError && (
+                                    <p className="mt-1.5 text-[10px] text-red-400 bg-red-500/5 px-2.5 py-1 rounded border border-red-500/10 animate-slide-down">
+                                        Verification failed: {geminiVerificationError}
+                                    </p>
+                                )}
+                                {geminiVerified && geminiModels.length > 0 && (
+                                    <div className="mt-2.5 pl-3 border-l-2 border-emerald-500/40 animate-slide-down space-y-1">
+                                        <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                                            Select Gemini Model
+                                        </label>
+                                        <select
+                                            value={settings.geminiModel}
+                                            onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-zinc-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                        >
+                                            {geminiModels.map(model => (
+                                                <option key={model} value={model}>{model}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-zinc-300 mb-1">
-                                    Groq API Key (Fallback)
+                                <label className="block text-sm font-medium text-zinc-300 mb-1 flex items-center justify-between">
+                                    <span>Groq API Key (Fallback)</span>
+                                    {groqVerified && (
+                                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
+                                            ✓ Verified
+                                        </span>
+                                    )}
                                 </label>
-                                <input
-                                    type="password"
-                                    value={settings.groqApiKey}
-                                    onChange={(e) => setSettings({ ...settings, groqApiKey: e.target.value })}
-                                    placeholder="gsk_..."
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="password"
+                                        value={settings.groqApiKey}
+                                        onChange={(e) => handleApiKeyChange('groq', e.target.value)}
+                                        placeholder="gsk_..."
+                                        className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                    />
+                                    {settings.groqApiKey && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleVerifyKey('groq')}
+                                            disabled={verifyingGroq}
+                                            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center justify-center min-w-[80px] ${
+                                                groqVerified
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                                            }`}
+                                        >
+                                            {verifyingGroq ? 'Testing...' : groqVerified ? 'Verified' : 'Verify'}
+                                        </button>
+                                    )}
+                                </div>
+                                {groqVerificationError && (
+                                    <p className="mt-1.5 text-[10px] text-red-400 bg-red-500/5 px-2.5 py-1 rounded border border-red-500/10 animate-slide-down">
+                                        Verification failed: {groqVerificationError}
+                                    </p>
+                                )}
+                                {groqVerified && groqModels.length > 0 && (
+                                    <div className="mt-2.5 pl-3 border-l-2 border-emerald-500/40 animate-slide-down space-y-1">
+                                        <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                                            Select Groq Model
+                                        </label>
+                                        <select
+                                            value={settings.groqModel}
+                                            onChange={(e) => setSettings({ ...settings, groqModel: e.target.value })}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-zinc-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                        >
+                                            {groqModels.map(model => (
+                                                <option key={model} value={model}>{model}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="pt-2 border-t border-zinc-800 mt-4">
@@ -665,7 +845,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                             <p className="mt-2 text-xs text-zinc-500">
                                 {settings.useOllamaOnly 
                                     ? "Currently strictly using local Ollama. Cloud fallbacks are disabled." 
-                                    : "Gemini is the cloud primary. Groq is the cloud fallback. Ollama is checked first if active."}
+                                    : "Gemini is the cloud primary. Groq is the cloud fallback. Ollama is the local fallback."}
                             </p>
                         </div>
                     )}

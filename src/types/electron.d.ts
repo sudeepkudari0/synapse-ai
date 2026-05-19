@@ -65,6 +65,7 @@ interface ElectronAPI {
     downloadMoonshineModel: (modelName: string) => Promise<{ success: boolean; error?: string }>;
     checkSttServer: (engine: 'whisper' | 'moonshine' | 'deepgram') => Promise<{ exists: boolean; error?: string }>;
     testOllama: () => Promise<{ success: boolean; message?: string; error?: string }>;
+    llmGetAvailableModels: (provider: 'gemini' | 'groq') => Promise<{ success: boolean; models?: string[]; error?: string }>;
 
     // Storage API
     session: {
