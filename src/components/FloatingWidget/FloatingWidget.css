@@ -53,9 +53,11 @@
                 transform var(--duration-normal) var(--ease-out);
     pointer-events: none;
     /* Fill remaining widget space and scroll when needed */
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
-    overflow: hidden; /* Changed from overflow-y:auto — inner panels handle their own scroll */
+    overflow: hidden; /* inner panels handle their own scroll */
 }
 
 .widget--expanded .widget-body {
@@ -69,8 +71,9 @@
 
 .split-layout {
     display: flex;
-    height: calc(85vh - var(--header-height) - 40px); /* Reserve space for bottom bar */
+    flex: 1;
     min-height: 300px;
+    overflow: hidden; /* ensure inner panels can scroll */
 }
 
 .split-layout__left {
@@ -265,4 +268,46 @@
     border: 1px solid rgba(34, 197, 94, 0.15);
     font-size: 10px;
     color: rgba(34, 197, 94, 0.7);
+}
+
+/* ─── Resize Handles ─── */
+.resize-handle {
+    position: absolute;
+    z-index: 100;
+}
+
+/* Left edge resize */
+.resize-handle-left {
+    top: 0;
+    left: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+}
+
+/* Bottom edge resize */
+.resize-handle-bottom {
+    bottom: -4px;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    cursor: ns-resize;
+}
+
+/* Bottom-left corner resize */
+.resize-handle-bottom-left {
+    bottom: -6px;
+    left: -6px;
+    width: 14px;
+    height: 14px;
+    cursor: nesw-resize;
+    z-index: 101;
+}
+
+/* ─── Resizing State ─── */
+body.is-resizing .widget {
+    transition: none !important;
+}
+body.is-resizing * {
+    user-select: none !important;
 }

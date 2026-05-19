@@ -10,6 +10,7 @@ import { PracticeMode } from '../PracticeMode/PracticeMode';
 import { MetricsBar } from '../DeliveryMetrics/MetricsBar';
 import { Shield } from 'lucide-react';
 import type { ChatBlock, DetectedQuestion, CandidateQuestion } from '../../state';
+import { useResize } from '../../hooks/useResize';
 import './FloatingWidget.css';
 
 interface FloatingWidgetProps {
@@ -108,6 +109,22 @@ export function FloatingWidget({
         }));
     }, []);
 
+    // ─── Widget Size (for resize) ───
+    const [widgetSize, setWidgetSize] = useState({ width: 860, height: -1 });
+
+    const handleResize = useCallback((deltaW: number, deltaH: number, edge: 'left' | 'bottom' | 'bottom-left') => {
+        setWidgetSize(prev => {
+            const currentHeight = prev.height === -1 && widgetRef.current ? widgetRef.current.offsetHeight : prev.height;
+            const newWidth = edge === 'left' || edge === 'bottom-left' ? Math.max(400, prev.width - deltaW) : prev.width;
+            const newHeight = edge === 'bottom' || edge === 'bottom-left' ? Math.max(300, currentHeight + deltaH) : prev.height;
+            return { width: newWidth, height: newHeight };
+        });
+    }, []);
+
+    const { onMouseDown: onResizeLeft } = useResize((dW, dH) => handleResize(dW, dH, 'left'));
+    const { onMouseDown: onResizeBottom } = useResize((dW, dH) => handleResize(dW, dH, 'bottom'));
+    const { onMouseDown: onResizeBottomLeft } = useResize((dW, dH) => handleResize(dW, dH, 'bottom-left'));
+
     // Reset selected session when history is toggled
     useEffect(() => {
         if (!isHistoryOpen) {
@@ -169,8 +186,24 @@ export function FloatingWidget({
                 ref={widgetRef}
                 className={`widget pointer-events-auto ${isExpanded ? 'widget--expanded' : 'widget--collapsed'}`}
                 id="floating-widget"
-                style={{ top: `${widgetPos.top}px`, right: `${widgetPos.right}px` }}
+                style={{ 
+                    top: `${widgetPos.top}px`, 
+                    right: `${widgetPos.right}px`,
+                    ...(isExpanded ? {
+                        width: `${widgetSize.width}px`,
+                        height: widgetSize.height !== -1 ? `${widgetSize.height}px` : undefined,
+                        maxHeight: widgetSize.height !== -1 ? 'none' : undefined,
+                    } : {})
+                }}
             >
+                {/* Resize Handles (only visible when expanded) */}
+                {isExpanded && (
+                    <>
+                        <div className="resize-handle resize-handle-left" onMouseDown={onResizeLeft} />
+                        <div className="resize-handle resize-handle-bottom" onMouseDown={onResizeBottom} />
+                        <div className="resize-handle resize-handle-bottom-left" onMouseDown={onResizeBottomLeft} />
+                    </>
+                )}
                 {/* Header — always visible */}
                 <WidgetHeader
                     isRecording={isRecording}
