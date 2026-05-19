@@ -228,7 +228,7 @@ export function FloatingWidget({
                 {/* Expandable content */}
                 <div className="widget-body">
                     {isFullPagePanel ? (
-                        <>
+                        <div className="flex flex-col flex-1 h-full w-full overflow-hidden">
                             {isSettingsOpen ? (
                                 <SettingsPanel 
                                     onClose={onToggleSettings} 
@@ -250,9 +250,11 @@ export function FloatingWidget({
                                     />
                                 )
                             ) : isPracticeOpen ? (
-                                <PracticeMode />
+                                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                    <PracticeMode />
+                                </div>
                             ) : null}
-                        </>
+                        </div>
                     ) : (
                         <>
                             {/* Loading indicator */}

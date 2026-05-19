@@ -196,7 +196,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     };
 
     return (
-        <div className="flex flex-col border-t border-[var(--border-subtle)] animate-slide-up bg-zinc-900">
+        <div className="flex flex-col flex-1 h-full border-t border-[var(--border-subtle)] animate-slide-up bg-zinc-900">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800">
                 <div className="flex items-center gap-2">
@@ -260,7 +260,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                 </div>
 
                 {/* Content */}
-                <div className="p-4 min-h-[200px]">
+                <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
                     {activeTab === 'profile' ? (
                         <div className="space-y-6">
                             <ProfileSection />

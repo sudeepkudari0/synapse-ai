@@ -215,7 +215,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     };
 
     return (
-        <div className="flex flex-col h-[450px] border-t border-[var(--border-subtle)] animate-slide-up bg-zinc-900 shadow-2xl relative">
+        <div className="flex flex-col flex-1 h-full border-t border-[var(--border-subtle)] animate-slide-up bg-zinc-900 shadow-2xl relative">
             {/* Cropper Overlay */}
             {rawCapture && (
                 <ImageCropper 
