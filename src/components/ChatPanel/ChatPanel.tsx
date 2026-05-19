@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, User, Loader2, Camera, Crop } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useLLM } from '../../hooks/useLLM';
 
 interface Message {
@@ -93,22 +94,22 @@ function ImageCropper({ src, onCrop, onCancel }: { src: string, onCrop: (cropped
                 </div>
             </div>
             <div className="flex-1 rounded-lg overflow-hidden flex items-center justify-center cursor-crosshair border border-zinc-800 bg-zinc-950/50">
-                <div 
+                <div
                     className="relative max-w-full max-h-full inline-block"
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
                 >
-                    <img 
-                        ref={imageRef} 
-                        src={`data:image/png;base64,${src}`} 
-                        className="max-w-full max-h-[280px] object-contain pointer-events-none" 
-                        alt="Crop target" 
+                    <img
+                        ref={imageRef}
+                        src={`data:image/png;base64,${src}`}
+                        className="max-w-full max-h-[280px] object-contain pointer-events-none"
+                        alt="Crop target"
                         draggable={false}
                     />
                     {(crop.width > 0 && crop.height > 0) && (
-                        <div 
+                        <div
                             className="absolute border-2 border-indigo-400 bg-indigo-400/20"
                             style={{
                                 left: crop.x,
@@ -132,7 +133,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     const [attachedImage, setAttachedImage] = useState<string | null>(null);
     const [isCapturing, setIsCapturing] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    
+
     const { isGenerating, generateResponse } = useLLM({
         systemPrompt: "You are a helpful AI assistant integrated into an overlay tool. Be concise, direct, and helpful. Use markdown formatting where appropriate.",
     });
@@ -168,7 +169,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         setAttachedImage(null);
 
         const userMsg: Message = { id: Date.now().toString(), role: 'user', text: userText, imageData: imageToSend || undefined };
-        
+
         const assistantId = (Date.now() + 1).toString();
         const assistantMsg: Message = { id: assistantId, role: 'assistant', text: '', isStreaming: true };
 
@@ -183,8 +184,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                 contextMessages.length > 0 ? `Previous Conversation:\n${contextMessages}` : undefined,
                 (chunk) => {
                     streamedText += chunk;
-                    setMessages(prev => 
-                        prev.map(m => 
+                    setMessages(prev =>
+                        prev.map(m =>
                             m.id === assistantId ? { ...m, text: streamedText } : m
                         )
                     );
@@ -192,15 +193,15 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                 imageToSend || undefined
             );
 
-            setMessages(prev => 
-                prev.map(m => 
+            setMessages(prev =>
+                prev.map(m =>
                     m.id === assistantId ? { ...m, isStreaming: false } : m
                 )
             );
         } catch (error) {
             console.error('Chat generation error:', error);
-            setMessages(prev => 
-                prev.map(m => 
+            setMessages(prev =>
+                prev.map(m =>
                     m.id === assistantId ? { ...m, text: streamedText + '\n\n**[Error generating response]**', isStreaming: false } : m
                 )
             );
@@ -215,11 +216,11 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     };
 
     return (
-        <div className="flex flex-col flex-1 h-full border-t border-[var(--border-subtle)] animate-slide-up bg-zinc-900 shadow-2xl relative">
+        <div className="flex flex-col flex-1 h-full min-h-0 border-t border-[var(--border-subtle)] animate-slide-up bg-zinc-900 shadow-2xl relative">
             {/* Cropper Overlay */}
             {rawCapture && (
-                <ImageCropper 
-                    src={rawCapture} 
+                <ImageCropper
+                    src={rawCapture}
                     onCrop={(cropped) => {
                         setAttachedImage(cropped);
                         setRawCapture(null);
@@ -229,12 +230,12 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
             )}
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-sm z-10 relative shadow-sm">
+            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-sm z-10 relative shadow-sm">
                 <div className="flex items-center gap-2">
                     <Bot className="w-5 h-5 text-indigo-400" />
                     <h2 className="text-sm font-semibold text-white tracking-wide">AI Assistant</h2>
                 </div>
-                <button 
+                <button
                     onClick={onClose}
                     className="p-1.5 text-zinc-400 hover:text-white rounded-md hover:bg-zinc-800 transition-all duration-200"
                 >
@@ -243,7 +244,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent select-text">
+            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent select-text">
                 {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-3 opacity-60">
                         <Bot className="w-10 h-10" />
@@ -251,28 +252,113 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                         <p className="text-[10px]">You can attach screenshots for context.</p>
                     </div>
                 )}
-                
+
                 {messages.map((msg) => (
-                    <div 
-                        key={msg.id} 
+                    <div
+                        key={msg.id}
                         className={`flex gap-3 animate-fade-in ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                     >
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                            msg.role === 'user' ? 'bg-indigo-600' : 'bg-zinc-800 border border-zinc-700'
-                        }`}>
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === 'user' ? 'bg-indigo-600' : 'bg-zinc-800 border border-zinc-700'
+                            }`}>
                             {msg.role === 'user' ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-indigo-400" />}
                         </div>
-                        
-                        <div className={`max-w-[80%] flex flex-col gap-2 rounded-2xl px-4 py-2.5 text-sm ${
-                            msg.role === 'user' 
-                                ? 'bg-indigo-600 text-white rounded-tr-sm shadow-md' 
+
+                        <div className={`max-w-[80%] min-w-0 overflow-hidden flex flex-col gap-2 rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'user'
+                                ? 'bg-indigo-600 text-white rounded-tr-sm shadow-md'
                                 : 'bg-zinc-800 text-zinc-200 border border-zinc-700 rounded-tl-sm shadow-md'
-                        }`}>
+                            }`}>
                             {msg.imageData && (
                                 <img src={`data:image/jpeg;base64,${msg.imageData}`} alt="Attached context" className="rounded-lg max-h-32 object-contain bg-black/20" />
                             )}
                             {msg.text && (
-                                <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                                <div className="leading-relaxed text-sm select-text min-w-0 w-full">
+                                    <ReactMarkdown
+                                        components={{
+                                            p({ children }) {
+                                                return <p className="mb-2 last:mb-0">{children}</p>;
+                                            },
+                                            ul({ children }) {
+                                                return <ul className="list-disc pl-5 mb-2 last:mb-0 space-y-1">{children}</ul>;
+                                            },
+                                            ol({ children }) {
+                                                return <ol className="list-decimal pl-5 mb-2 last:mb-0 space-y-1">{children}</ol>;
+                                            },
+                                            li({ children }) {
+                                                return <li className="mb-0.5">{children}</li>;
+                                            },
+                                            h1({ children }) {
+                                                return <h1 className="text-base font-semibold mt-3 mb-1.5 first:mt-0">{children}</h1>;
+                                            },
+                                            h2({ children }) {
+                                                return <h2 className="text-sm font-semibold mt-2.5 mb-1.5 first:mt-0">{children}</h2>;
+                                            },
+                                            h3({ children }) {
+                                                return <h3 className="text-xs font-semibold mt-2 mb-1 first:mt-0">{children}</h3>;
+                                            },
+                                            a({ href, children }) {
+                                                return (
+                                                    <a
+                                                        href={href}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className={msg.role === 'user' ? 'text-white underline hover:opacity-80' : 'text-indigo-400 hover:text-indigo-300 underline'}
+                                                    >
+                                                        {children}
+                                                    </a>
+                                                );
+                                            },
+                                            blockquote({ children }) {
+                                                return (
+                                                    <blockquote className={`border-l-2 pl-3 italic my-2 ${msg.role === 'user' ? 'border-white/50 text-white/80' : 'border-indigo-500/50 text-zinc-400'
+                                                        }`}>
+                                                        {children}
+                                                    </blockquote>
+                                                );
+                                            },
+                                            code({ node, className, children, ...props }) {
+                                                const match = /language-(\w+)/.exec(className || '');
+                                                const isInline = !match;
+                                                if (isInline) {
+                                                    return (
+                                                        <code
+                                                            className={`px-1.5 py-0.5 rounded text-[11px] font-mono ${msg.role === 'user'
+                                                                    ? 'bg-indigo-700 text-white'
+                                                                    : 'bg-zinc-900 text-emerald-400'
+                                                                }`}
+                                                            {...props}
+                                                        >
+                                                            {children}
+                                                        </code>
+                                                    );
+                                                }
+                                                const lang = match ? match[1] : '';
+                                                const codeString = String(children).replace(/\n$/, '');
+                                                return (
+                                                    <div className="relative group my-3 rounded-lg overflow-hidden border border-zinc-700/50 w-full min-w-0">
+                                                        <div className="flex items-center justify-between bg-zinc-800/80 px-3 py-1.5 border-b border-zinc-700/50">
+                                                            <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                                                                {lang || 'code'}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => navigator.clipboard.writeText(codeString)}
+                                                                className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                                                            >
+                                                                Copy
+                                                            </button>
+                                                        </div>
+                                                        <pre className="!bg-zinc-950 !m-0 p-3 overflow-x-auto scrollbar-thin">
+                                                            <code className={`${className || ''} text-xs font-mono leading-relaxed text-zinc-200`} {...props}>
+                                                                {children}
+                                                            </code>
+                                                        </pre>
+                                                    </div>
+                                                );
+                                            },
+                                        }}
+                                    >
+                                        {msg.text}
+                                    </ReactMarkdown>
+                                </div>
                             )}
                             {msg.isStreaming && (
                                 <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-400 animate-pulse align-middle" />
@@ -284,12 +370,12 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
             </div>
 
             {/* Input Area */}
-            <div className="p-3 border-t border-zinc-800 bg-zinc-900/50 flex flex-col gap-2">
+            <div className="shrink-0 p-3 border-t border-zinc-800 bg-zinc-900/50 flex flex-col gap-2">
                 {/* Attached Image Preview */}
                 {attachedImage && (
                     <div className="relative self-start group mb-1">
                         <img src={`data:image/jpeg;base64,${attachedImage}`} alt="Preview" className="h-16 w-auto rounded-md border border-zinc-700 shadow-sm" />
-                        <button 
+                        <button
                             onClick={() => setAttachedImage(null)}
                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
@@ -297,16 +383,15 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                         </button>
                     </div>
                 )}
-                
+
                 <div className="relative flex items-center gap-2">
                     <button
                         onClick={handleAttachCapture}
                         disabled={isCapturing}
-                        className={`p-2 rounded-lg transition-all duration-200 flex items-center justify-center border border-zinc-800 ${
-                            isCapturing 
-                                ? 'text-zinc-600 bg-zinc-900 cursor-not-allowed' 
+                        className={`p-2 rounded-lg transition-all duration-200 flex items-center justify-center border border-zinc-800 ${isCapturing
+                                ? 'text-zinc-600 bg-zinc-900 cursor-not-allowed'
                                 : 'text-zinc-400 hover:text-indigo-400 hover:bg-zinc-800 bg-zinc-950'
-                        }`}
+                            }`}
                         title="Capture Screen Region"
                     >
                         {isCapturing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
@@ -325,11 +410,10 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                         <button
                             onClick={handleSend}
                             disabled={(!input.trim() && !attachedImage) || isGenerating}
-                            className={`absolute right-2 p-2 rounded-lg transition-all duration-200 flex items-center justify-center ${
-                                (!input.trim() && !attachedImage) || isGenerating 
-                                    ? 'text-zinc-600 cursor-not-allowed' 
+                            className={`absolute right-2 p-2 rounded-lg transition-all duration-200 flex items-center justify-center ${(!input.trim() && !attachedImage) || isGenerating
+                                    ? 'text-zinc-600 cursor-not-allowed'
                                     : 'text-indigo-400 hover:text-white hover:bg-indigo-600 shadow-sm'
-                            }`}
+                                }`}
                         >
                             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                         </button>
