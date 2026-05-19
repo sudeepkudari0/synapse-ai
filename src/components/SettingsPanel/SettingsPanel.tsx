@@ -13,6 +13,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [models, setModels] = useState<string[]>([]);
     const [settings, setSettings] = useState({
         sttEngine: 'moonshine' as 'whisper' | 'moonshine' | 'deepgram',
+        sttMode: 'vad' as 'vad' | 'chunks',
         whisperModel: 'small.en',
         moonshineModel: 'MEDIUM_STREAMING',
         downloadedMoonshineModels: [] as string[],
@@ -79,6 +80,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             if (settingsRes.success && settingsRes.settings) {
                 setSettings({
                     sttEngine: settingsRes.settings.sttEngine || 'moonshine',
+                    sttMode: settingsRes.settings.sttMode || 'vad',
                     whisperModel: settingsRes.settings.whisperModel || 'small.en',
                     moonshineModel: settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING',
                     downloadedMoonshineModels: settingsRes.settings.downloadedMoonshineModels || [],
@@ -352,6 +354,41 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                         </p>
                                     </div>
                                 )}
+                            </div>
+
+                            <div className="pt-2 border-t border-zinc-800/50 flex items-center justify-between">
+                                <div>
+                                    <label className="block text-xs font-medium text-white">Transcription Mode</label>
+                                    <p className="text-[10px] text-zinc-500">
+                                        {settings.sttMode === 'chunks' 
+                                            ? 'Continuous (Fixed 2.5s chunks - faster feedback)' 
+                                            : 'Utterance-based (Wait for pause - higher accuracy)'}
+                                    </p>
+                                </div>
+                                <div className="flex bg-zinc-950 p-0.5 rounded-lg border border-zinc-800">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings({ ...settings, sttMode: 'vad' })}
+                                        className={`px-2.5 py-1 text-[10px] font-medium rounded transition-all duration-150 ${
+                                            settings.sttMode === 'vad'
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'text-zinc-400 hover:text-zinc-200'
+                                        }`}
+                                    >
+                                        VAD (Utterance)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings({ ...settings, sttMode: 'chunks' })}
+                                        className={`px-2.5 py-1 text-[10px] font-medium rounded transition-all duration-150 ${
+                                            settings.sttMode === 'chunks'
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'text-zinc-400 hover:text-zinc-200'
+                                        }`}
+                                    >
+                                        2.5s Chunks
+                                    </button>
+                                </div>
                             </div>
 
                             {settings.sttEngine === 'whisper' && (

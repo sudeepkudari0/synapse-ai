@@ -21,9 +21,10 @@ export interface AppSettings {
     showDeliveryMetrics: boolean;
     interviewLanguage: string;
     isESLMode: boolean;
+    sttMode: 'vad' | 'chunks';
 }
 
-const CURRENT_VERSION = 9;
+const CURRENT_VERSION = 10;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     showDeliveryMetrics: true,
     interviewLanguage: 'en',
     isESLMode: false,
+    sttMode: 'vad',
 };
 
 // Migration map: version number -> transform function
@@ -113,6 +115,14 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             ...settings,
             deepgramModel: 'nova-3',
             version: 9,
+        };
+    },
+    9: (settings: any) => {
+        // v9 -> v10: Add sttMode
+        return {
+            ...settings,
+            sttMode: 'vad',
+            version: 10,
         };
     },
 };
