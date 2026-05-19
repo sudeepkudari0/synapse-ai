@@ -12,7 +12,7 @@ import { getCodeAnalysisPrompt } from './lib/prompts/templates/code-analysis';
 import { TimestampDeduplicator } from './lib/timestamp-deduplicator';
 import { filterHallucinations } from './lib/hallucination-filter';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
-import type { ChatBlock, Answer, DetectedQuestion, AnswerOption } from './state';
+import type { ChatBlock, Answer } from './state';
 
 function App(): JSX.Element {
     // ─── Zustand stores ───
@@ -26,6 +26,7 @@ function App(): JSX.Element {
         candidateQuestions, detectedQuestions, expandedQuestionId,
         addAnswer, updateAnswer,
         addCandidateQuestion, removeCandidateQuestion, clearCandidateQuestions, setCandidateStatus,
+        updateCandidateAnswer,
         addDetectedQuestion, updateQuestionOption, selectOption,
         clearDetectedQuestions, setQuestionGenerating,
     } = useAnswerStore();
@@ -275,29 +276,11 @@ function App(): JSX.Element {
         handleInterviewerSpeechStart
     );
 
-    // ─── Answer style definitions ───
-    const ANSWER_STYLES: { style: AnswerOption['style']; styleLabel: string; promptSuffix: string }[] = [
-        {
-            style: 'strategic',
-            styleLabel: 'Focused/Strategic',
-            promptSuffix: '\n\nApproach: Give a focused, strategic answer. Lead with the high-level approach, mention key decisions and trade-offs. Be concise and executive-level.',
-        },
-        {
-            style: 'technological',
-            styleLabel: 'Technological',
-            promptSuffix: '\n\nApproach: Give a technical, implementation-focused answer. Mention specific technologies, tools, frameworks, and patterns. Include concrete technical details.',
-        },
-        {
-            style: 'process-driven',
-            styleLabel: 'Process-Driven',
-            promptSuffix: '\n\nApproach: Give a process-driven, methodical answer. Focus on monitoring, workflows, CI/CD, best practices, and systematic approaches. Emphasize repeatability and reliability.',
-        },
-    ];
-
-    // ─── User picks a candidate question → generate 3 answer options ───
+    // ─── User picks a candidate question → generate single inline answer ───
     const handlePickQuestion = async (candidateId: string, questionText: string) => {
         // Mark the candidate as "answering"
         setCandidateStatus(candidateId, 'answering');
+        updateCandidateAnswer(candidateId, { answer: '', isStreaming: true });
 
         const recentBlocks = conversationRef.current.slice(-5);
         const contextTranscript = recentBlocks.map(b => `${b.speaker === 'user' ? 'ME' : 'Interviewer'}: ${b.text}`).join('\n\n');
@@ -310,85 +293,57 @@ function App(): JSX.Element {
             interviewType = detected;
         }
 
-        const questionId = Date.now().toString();
-        const options: AnswerOption[] = ANSWER_STYLES.map((s, idx) => ({
-            id: `${questionId}-opt-${idx}`,
-            style: s.style,
-            styleLabel: s.styleLabel,
-            answer: '',
-            isStreaming: true,
-        }));
+        try {
+            let streamedAnswer = '';
 
-        const newQuestion: DetectedQuestion = {
-            id: questionId,
-            questionText: questionText,
-            timestamp: new Date(),
-            interviewType,
-            options,
-            isGenerating: true,
-        };
+            await generateAnswerWithTemplate(
+                {
+                    interviewType: interviewType as any,
+                    currentQuestion: contextTranscript,
+                    conversationHistory: '',
+                    resume: profile.resume,
+                    jobDescription: profile.jobDescription,
+                    company: profile.targetCompany,
+                    useBulletPoints,
+                },
+                (chunk) => {
+                    streamedAnswer += chunk;
+                    updateCandidateAnswer(candidateId, {
+                        answer: streamedAnswer,
+                        isStreaming: true,
+                    });
+                }
+            );
 
-        addDetectedQuestion(newQuestion);
-        setExpanded(true);
-
-        // Remove from candidates list (it's now being answered)
-        removeCandidateQuestion(candidateId);
-
-        // Generate all 3 options in parallel
-        const generateOption = async (optionIndex: number) => {
-            const style = ANSWER_STYLES[optionIndex];
-            const optionId = options[optionIndex].id;
-
-            try {
-                let streamedAnswer = '';
-
-                await generateAnswerWithTemplate(
-                    {
-                        interviewType: interviewType as any,
-                        currentQuestion: contextTranscript + style.promptSuffix,
-                        conversationHistory: '',
-                        resume: profile.resume,
-                        jobDescription: profile.jobDescription,
-                        company: profile.targetCompany,
-                        useBulletPoints,
-                    },
-                    (chunk) => {
-                        streamedAnswer += chunk;
-                        updateQuestionOption(questionId, optionId, {
-                            answer: streamedAnswer,
-                            isStreaming: true,
-                        });
-                    }
-                );
-
-                updateQuestionOption(questionId, optionId, { isStreaming: false });
-            } catch (error) {
-                console.error(`Failed to generate option ${optionIndex}:`, error);
-                updateQuestionOption(questionId, optionId, {
-                    answer: 'Failed to generate answer.',
-                    isStreaming: false,
-                });
-            }
-        };
-
-        await Promise.all([
-            generateOption(0),
-            generateOption(1),
-            generateOption(2),
-        ]);
-
-        setQuestionGenerating(questionId, false);
+            updateCandidateAnswer(candidateId, {
+                isStreaming: false,
+                status: 'answered',
+            });
+        } catch (error) {
+            console.error('Failed to generate answer:', error);
+            updateCandidateAnswer(candidateId, {
+                answer: 'Failed to generate answer.',
+                isStreaming: false,
+                status: 'answered',
+            });
+        }
     };
 
-    // ─── Manual generate (Ctrl+Shift+G) → add as candidate for the user to pick ───
+    // ─── Manual generate (Ctrl+Shift+G) → add as candidate and immediately generate answer ───
     const handleGenerateAnswer = async () => {
         const lastInterviewerBlock = [...conversationRef.current].reverse().find(b => b.speaker === 'interviewer');
         const questionText = lastInterviewerBlock?.text || '';
         if (!questionText.trim()) return;
 
-        // Directly pick this question (skip the candidate step)
-        const candidateId = 'manual-' + Date.now();
-        await handlePickQuestion(candidateId, questionText);
+        // Add as a candidate first so it appears in the UI
+        addCandidateQuestion(questionText, 1.0, ['manual']);
+
+        // Get the newly added candidate's ID (it was prepended as first item)
+        const candidates = useAnswerStore.getState().candidateQuestions;
+        const newCandidate = candidates[0];
+        if (newCandidate) {
+            await handlePickQuestion(newCandidate.id, questionText);
+        }
     };
 
     // ─── Action handlers ───

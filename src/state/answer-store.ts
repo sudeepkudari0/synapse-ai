@@ -17,9 +17,9 @@ export interface CandidateQuestion {
     confidence: number;         // Detection confidence (0-1)
     signals: string[];          // Which detection signals fired
     status: 'pending' | 'answering' | 'answered';
-    // Populated when user selects this question for answering:
-    options?: AnswerOption[];
-    selectedOptionId?: string;  // Which option the user expanded
+    // Inline answer (generated when user clicks the question)
+    answer?: string;
+    isStreaming?: boolean;
 }
 
 // Legacy Answer interface — kept for backward compatibility (screen capture, etc.)
@@ -87,10 +87,10 @@ export interface DetectedQuestion {
 }
 
 interface AnswerState {
-    // New: Candidate questions (detected, waiting for user pick)
+    // Candidate questions (detected, with inline answers)
     candidateQuestions: CandidateQuestion[];
 
-    // Legacy: Detected questions with multi-option answers (used when user picks a candidate)
+    // Legacy: Detected questions with multi-option answers (kept for backward compat)
     detectedQuestions: DetectedQuestion[];
     expandedQuestionId: string | null;
 
@@ -104,8 +104,9 @@ interface AnswerState {
     removeCandidateQuestion: (id: string) => void;
     clearCandidateQuestions: () => void;
     setCandidateStatus: (id: string, status: CandidateQuestion['status']) => void;
+    updateCandidateAnswer: (id: string, updates: Partial<Pick<CandidateQuestion, 'answer' | 'isStreaming' | 'status'>>) => void;
 
-    // ─── Detected question actions (after user picks) ───
+    // ─── Detected question actions (kept for backward compat) ───
     addDetectedQuestion: (question: DetectedQuestion) => void;
     updateQuestionOption: (questionId: string, optionId: string, updates: Partial<AnswerOption>) => void;
     selectOption: (questionId: string, optionId: string) => void;
@@ -182,6 +183,13 @@ export const useAnswerStore = create<AnswerState>((set) => ({
         set((state) => ({
             candidateQuestions: state.candidateQuestions.map((q) =>
                 q.id === id ? { ...q, status } : q
+            ),
+        })),
+
+    updateCandidateAnswer: (id, updates) =>
+        set((state) => ({
+            candidateQuestions: state.candidateQuestions.map((q) =>
+                q.id === id ? { ...q, ...updates } : q
             ),
         })),
 

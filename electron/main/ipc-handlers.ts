@@ -163,13 +163,12 @@ export function registerIPCHandlers(): void {
     // Check if STT server exists
     ipcMain.handle(IPC_CHANNELS.CHECK_STT_SERVER, async (event, engine: 'whisper' | 'moonshine') => {
         const exeName = engine === 'whisper' ? 'whisper-server.exe' : 'moonshine-server.exe';
-        const isPackaged = app.isPackaged;
         let p;
         
-        if (isPackaged) {
-            p = path.join(process.resourcesPath, 'native', 'whisper', exeName);
+        if (app.isPackaged) {
+            p = path.join(process.resourcesPath, 'whisper', exeName);
         } else {
-            p = path.join(__dirname, '../../native/whisper', exeName);
+            p = path.join(app.getAppPath(), 'native', 'whisper', exeName);
         }
         
         return { exists: fs.existsSync(p) };

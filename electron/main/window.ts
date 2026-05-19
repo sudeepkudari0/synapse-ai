@@ -12,6 +12,17 @@ export function createMainWindow(): BrowserWindow {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
+    // Resolve icon – in dev it's at project root; in production electron-builder
+    // copies buildResources into the app directory.
+    const possibleIconPaths = [
+        path.join(app.getAppPath(), 'build', 'icon.ico'),
+        path.join(process.resourcesPath, 'icon.ico'),
+        path.join(__dirname, '../../build/icon.ico'),
+    ];
+    const iconPath = possibleIconPaths.find(p => {
+        try { return require('fs').existsSync(p); } catch { return false; }
+    });
+
     const mainWindow = new BrowserWindow({
         width: screenWidth,
         height: screenHeight,
@@ -26,6 +37,7 @@ export function createMainWindow(): BrowserWindow {
         show: false,
         focusable: true,
         hasShadow: false,
+        icon: iconPath,
         webPreferences: {
             preload: path.join(__dirname, '../preload/index.cjs'),
             contextIsolation: true,

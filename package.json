@@ -50,6 +50,10 @@
         ]
       },
       {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
         "from": ".env",
         "to": ".env"
       }
