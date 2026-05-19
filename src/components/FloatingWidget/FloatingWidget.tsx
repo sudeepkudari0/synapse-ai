@@ -34,6 +34,7 @@ interface FloatingWidgetProps {
     expandedQuestionId: string | null;
     autoDetectionEnabled: boolean;
     sttEngine: string;
+    sttModel: string;
     audioLevels: { mic: number; system: number };
 
     // Actions
@@ -76,6 +77,7 @@ export function FloatingWidget({
     expandedQuestionId,
     autoDetectionEnabled,
     sttEngine,
+    sttModel,
     audioLevels,
     onToggleExpanded,
     onToggleRecording,
@@ -285,6 +287,7 @@ export function FloatingWidget({
                                         onClear={onClearTranscript}
                                         isRecording={isRecording}
                                         sttEngine={sttEngine}
+                                        sttModel={sttModel}
                                         audioLevels={audioLevels}
                                     />
                                 </div>

@@ -39,6 +39,7 @@ function App(): JSX.Element {
     // ─── App-level state ───
     const [autoDetectionEnabled, setAutoDetectionEnabled] = useState(true);
     const [sttEngine, setSttEngine] = useState('Whisper.cpp');
+    const [sttModel, setSttModel] = useState('');
 
     // Load preferences from settings on mount
     useEffect(() => {
@@ -47,9 +48,10 @@ function App(): JSX.Element {
                 const mode = res.settings.questionDetectionMode || 'heuristic';
                 setAutoDetectionEnabled(mode !== 'manual');
 
-                // Set STT engine display name
+                // Set STT engine display name and model
                 const engine = res.settings.sttEngine || 'whisper';
                 setSttEngine(engine === 'moonshine' ? 'Moonshine' : 'Whisper.cpp');
+                setSttModel(engine === 'moonshine' ? (res.settings.moonshineModel || 'MEDIUM_STREAMING') : (res.settings.whisperModel || 'small.en'));
             }
         });
     }, []);
@@ -543,6 +545,7 @@ function App(): JSX.Element {
                 setAutoDetectionEnabled(mode !== 'manual');
                 const engine = settingsRes.settings.sttEngine || 'whisper';
                 setSttEngine(engine === 'moonshine' ? 'Moonshine' : 'Whisper.cpp');
+                setSttModel(engine === 'moonshine' ? (settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING') : (settingsRes.settings.whisperModel || 'small.en'));
             }
         } catch (error) {
             console.error('Failed to reload model after settings change:', error);
@@ -624,6 +627,7 @@ function App(): JSX.Element {
                 expandedQuestionId={expandedQuestionId}
                 autoDetectionEnabled={autoDetectionEnabled}
                 sttEngine={sttEngine}
+                sttModel={sttModel}
                 audioLevels={audioLevels}
                 onToggleExpanded={toggleExpanded}
                 onToggleRecording={handleToggleRecording}

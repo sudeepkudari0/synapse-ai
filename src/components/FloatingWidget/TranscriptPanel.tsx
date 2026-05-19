@@ -8,6 +8,7 @@ interface TranscriptPanelProps {
     onClear: () => void;
     isRecording?: boolean;
     sttEngine?: string; // Display name like 'Whisper.cpp' or 'Moonshine'
+    sttModel?: string; // e.g. 'small.en' or 'MEDIUM_STREAMING'
     audioLevels?: { mic: number; system: number }; // 0-1 normalized
 }
 
@@ -16,6 +17,7 @@ export function TranscriptPanel({
     onClear,
     isRecording,
     sttEngine = 'Whisper.cpp',
+    sttModel = '',
     audioLevels = { mic: 0, system: 0 },
 }: TranscriptPanelProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -42,7 +44,9 @@ export function TranscriptPanel({
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-800/80 border border-zinc-700/40">
                         <Mic className="w-3 h-3 text-zinc-400" />
-                        <span className="text-[10px] text-zinc-400 font-medium">{sttEngine}</span>
+                        <span className="text-[10px] text-zinc-400 font-medium">
+                            {sttEngine} {sttModel ? <span className="opacity-60 font-mono tracking-tighter">({sttModel})</span> : ''}
+                        </span>
                     </div>
                     {conversation.length > 0 && (
                         <IconButton
