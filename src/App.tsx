@@ -50,8 +50,16 @@ function App(): JSX.Element {
 
                 // Set STT engine display name and model
                 const engine = res.settings.sttEngine || 'whisper';
-                setSttEngine(engine === 'moonshine' ? 'Moonshine' : 'Whisper.cpp');
-                setSttModel(engine === 'moonshine' ? (res.settings.moonshineModel || 'MEDIUM_STREAMING') : (res.settings.whisperModel || 'small.en'));
+                if (engine === 'deepgram') {
+                    setSttEngine('Deepgram');
+                    setSttModel(res.settings.deepgramModel || 'nova-3');
+                } else if (engine === 'moonshine') {
+                    setSttEngine('Moonshine');
+                    setSttModel(res.settings.moonshineModel || 'MEDIUM_STREAMING');
+                } else {
+                    setSttEngine('Whisper.cpp');
+                    setSttModel(res.settings.whisperModel || 'small.en');
+                }
             }
         });
     }, []);
@@ -544,8 +552,16 @@ function App(): JSX.Element {
                 const mode = settingsRes.settings.questionDetectionMode || 'heuristic';
                 setAutoDetectionEnabled(mode !== 'manual');
                 const engine = settingsRes.settings.sttEngine || 'whisper';
-                setSttEngine(engine === 'moonshine' ? 'Moonshine' : 'Whisper.cpp');
-                setSttModel(engine === 'moonshine' ? (settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING') : (settingsRes.settings.whisperModel || 'small.en'));
+                if (engine === 'deepgram') {
+                    setSttEngine('Deepgram');
+                    setSttModel(settingsRes.settings.deepgramModel || 'nova-3');
+                } else if (engine === 'moonshine') {
+                    setSttEngine('Moonshine');
+                    setSttModel(settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING');
+                } else {
+                    setSttEngine('Whisper.cpp');
+                    setSttModel(settingsRes.settings.whisperModel || 'small.en');
+                }
             }
         } catch (error) {
             console.error('Failed to reload model after settings change:', error);

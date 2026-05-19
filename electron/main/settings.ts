@@ -4,10 +4,12 @@ import { app } from 'electron';
 
 export interface AppSettings {
     version: number;
-    sttEngine: 'whisper' | 'moonshine';
+    sttEngine: 'whisper' | 'moonshine' | 'deepgram';
     whisperModel: string;
     moonshineModel: string;
     downloadedMoonshineModels: string[];
+    deepgramApiKey: string;
+    deepgramModel: string;
     geminiApiKey: string;
     groqApiKey: string;
     useOllamaOnly: boolean;
@@ -21,7 +23,7 @@ export interface AppSettings {
     isESLMode: boolean;
 }
 
-const CURRENT_VERSION = 7;
+const CURRENT_VERSION = 9;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
@@ -29,6 +31,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     whisperModel: 'small.en',
     moonshineModel: 'MEDIUM_STREAMING',
     downloadedMoonshineModels: [],
+    deepgramApiKey: '',
+    deepgramModel: 'nova-3',
     geminiApiKey: '',
     groqApiKey: '',
     useOllamaOnly: false,
@@ -93,6 +97,22 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             ...settings,
             downloadedMoonshineModels: [],
             version: 7,
+        };
+    },
+    7: (settings: any) => {
+        // v7 -> v8: Add Deepgram STT support
+        return {
+            ...settings,
+            deepgramApiKey: '',
+            version: 8,
+        };
+    },
+    8: (settings: any) => {
+        // v8 -> v9: Add Deepgram Model support
+        return {
+            ...settings,
+            deepgramModel: 'nova-3',
+            version: 9,
         };
     },
 };

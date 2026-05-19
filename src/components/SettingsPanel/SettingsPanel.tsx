@@ -12,10 +12,12 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const [activeTab, setActiveTab] = useState<'profile' | 'models' | 'api' | 'stories'>('profile');
     const [models, setModels] = useState<string[]>([]);
     const [settings, setSettings] = useState({
-        sttEngine: 'moonshine' as 'whisper' | 'moonshine',
+        sttEngine: 'moonshine' as 'whisper' | 'moonshine' | 'deepgram',
         whisperModel: 'small.en',
         moonshineModel: 'MEDIUM_STREAMING',
         downloadedMoonshineModels: [] as string[],
+        deepgramApiKey: '',
+        deepgramModel: 'nova-3',
         geminiApiKey: '',
         groqApiKey: '',
         useOllamaOnly: false,
@@ -80,6 +82,8 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     whisperModel: settingsRes.settings.whisperModel || 'small.en',
                     moonshineModel: settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING',
                     downloadedMoonshineModels: settingsRes.settings.downloadedMoonshineModels || [],
+                    deepgramApiKey: settingsRes.settings.deepgramApiKey || '',
+                    deepgramModel: settingsRes.settings.deepgramModel || 'nova-3',
                     geminiApiKey: settingsRes.settings.geminiApiKey || '',
                     groqApiKey: settingsRes.settings.groqApiKey || '',
                     useOllamaOnly: settingsRes.settings.useOllamaOnly || false,
@@ -333,13 +337,14 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                 </label>
                                 <select
                                     value={settings.sttEngine}
-                                    onChange={(e) => setSettings({ ...settings, sttEngine: e.target.value as 'whisper' | 'moonshine' })}
+                                    onChange={(e) => setSettings({ ...settings, sttEngine: e.target.value as 'whisper' | 'moonshine' | 'deepgram' })}
                                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="moonshine">Moonshine v2 (Fast Streaming - Recommended)</option>
                                     <option value="whisper">Whisper.cpp (Legacy C++)</option>
+                                    <option value="deepgram">Deepgram (Cloud API - High Accuracy)</option>
                                 </select>
-                                {serverStatus && !serverStatus.exists && (
+                                {serverStatus && !serverStatus.exists && settings.sttEngine !== 'deepgram' && (
                                     <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-md">
                                         <p className="text-xs text-red-400 font-semibold mb-1">Server Executable Not Found!</p>
                                         <p className="text-[10px] text-zinc-400">
@@ -488,9 +493,45 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                     </div>
                                 </>
                             )}
+
+                            {settings.sttEngine === 'deepgram' && (
+                                <div className="pt-4 border-t border-zinc-800">
+                                    <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                        Deepgram Model
+                                    </label>
+                                    <select
+                                        value={settings.deepgramModel}
+                                        onChange={(e) => setSettings({ ...settings, deepgramModel: e.target.value })}
+                                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="nova-3">Nova 3 (Latest & Best Accuracy)</option>
+                                        <option value="nova-2">Nova 2 (Fast & Highly Accurate)</option>
+                                        <option value="nova-2-general">Nova 2 General</option>
+                                        <option value="nova-2-medical">Nova 2 Medical</option>
+                                        <option value="nova-2-meeting">Nova 2 Meeting</option>
+                                        <option value="nova-2-conversational">Nova 2 Conversational</option>
+                                        <option value="whisper-large">Whisper Large (Cloud)</option>
+                                    </select>
+                                    <p className="mt-2 text-xs text-zinc-500">
+                                        Select the Deepgram cloud model. Nova 3 is highly recommended. Make sure to set your API Key in the API Keys tab.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                    Deepgram API Key (Speech-to-Text)
+                                </label>
+                                <input
+                                    type="password"
+                                    value={settings.deepgramApiKey}
+                                    onChange={(e) => setSettings({ ...settings, deepgramApiKey: e.target.value })}
+                                    placeholder="dg_..."
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-zinc-300 mb-1">
                                     Gemini API Key

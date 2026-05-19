@@ -82,7 +82,7 @@ export class WhisperTranscriber {
     private serverProcess: ChildProcess | null = null;
     private activeTranscription: Promise<{ text: string, words?: any[] }> | null = null;
     private transcriptionCounter = 0;
-    private sttEngine: 'whisper' | 'moonshine' = 'moonshine';
+    private sttEngine: 'whisper' | 'moonshine' | 'deepgram' = 'moonshine';
 
     async initialize(modelName: string = 'small.en'): Promise<void> {
         const currentEngine = getSettings().sttEngine || 'moonshine';
@@ -96,8 +96,8 @@ export class WhisperTranscriber {
         }
 
         // Already initialized with same model & engine — skip.
-        if (this.isInitialized && this.modelPath === expectedModelPath && this.sttEngine === currentEngine && this.serverProcess) {
-            debugLog(`STT server already running (${currentEngine} - ${this.modelPath})`);
+        if (this.isInitialized && this.modelPath === expectedModelPath && this.sttEngine === currentEngine && (this.serverProcess || currentEngine === 'deepgram')) {
+            debugLog(`STT engine already active (${currentEngine})`);
             return;
         }
 
@@ -109,6 +109,12 @@ export class WhisperTranscriber {
         this.modelName = modelName;
         this.sttEngine = currentEngine;
         this.modelPath = expectedModelPath;
+        
+        if (this.sttEngine === 'deepgram') {
+            this.isInitialized = true;
+            serverLog(`Ready — engine "deepgram" initialized (Cloud API).`);
+            return;
+        }
         
         const basePath = resolveWhisperBasePath();
         const exeName = this.sttEngine === 'moonshine' ? 'moonshine-server.exe' : 'whisper-server.exe';
@@ -224,8 +230,11 @@ export class WhisperTranscriber {
     }
 
     async transcribe(audioData: Float32Array, prompt?: string): Promise<{ text: string, words?: any[] }> {
-        if (!this.isInitialized || !this.serverProcess) {
-            throw new Error('Whisper server not running. Call initialize() first.');
+        if (!this.isInitialized) {
+            throw new Error('STT engine not initialized. Call initialize() first.');
+        }
+        if (this.sttEngine !== 'deepgram' && !this.serverProcess) {
+            throw new Error('Local STT server not running.');
         }
 
         if (audioData.length === 0) {
@@ -243,8 +252,7 @@ export class WhisperTranscriber {
     }
 
     /**
-     * Send audio to the whisper-server via HTTP POST multipart/form-data
-     * to the /inference endpoint and return the transcribed text.
+     * Send audio to the local STT server or Deepgram Cloud API
      */
     private async sendToServer(audioData: Float32Array, prompt?: string): Promise<{ text: string, words?: any[] }> {
         const id = ++this.transcriptionCounter;
@@ -253,7 +261,11 @@ export class WhisperTranscriber {
         // Create WAV in memory (no disk I/O needed)
         const wavBuffer = createWavBuffer(audioData, 16000);
 
-        // Build multipart/form-data payload manually (no external deps needed)
+        if (this.sttEngine === 'deepgram') {
+            return this.sendToDeepgram(wavBuffer, id, startTime);
+        }
+
+        // Local Server (Moonshine / Whisper) HTTP POST multipart/form-data
         const boundary = `----WhisperBoundary${Date.now()}`;
         const parts: Buffer[] = [];
 
@@ -301,7 +313,7 @@ export class WhisperTranscriber {
 
         const body = Buffer.concat(parts);
 
-        debugLog(`[Whisper #${id}] sending ${(wavBuffer.length / 1024).toFixed(1)} KB WAV to server...`);
+        debugLog(`[STT #${id}] sending ${(wavBuffer.length / 1024).toFixed(1)} KB WAV to local server...`);
 
         const result = await new Promise<{ text: string, words?: any[] }>((resolve, reject) => {
             const req = http.request(
@@ -348,12 +360,12 @@ export class WhisperTranscriber {
             );
 
             req.on('error', (err) => {
-                reject(new Error(`Whisper server request failed: ${err.message}`));
+                reject(new Error(`Local STT server request failed: ${err.message}`));
             });
 
             req.on('timeout', () => {
                 req.destroy();
-                reject(new Error('Whisper server request timed out'));
+                reject(new Error('Local STT server request timed out'));
             });
 
             req.write(body);
@@ -363,11 +375,77 @@ export class WhisperTranscriber {
         const elapsed = Date.now() - startTime;
         const durationMs = (audioData.length / 16000) * 1000;
         debugLog(
-            `[Whisper #${id}] transcribed in ${elapsed}ms ` +
+            `[STT #${id}] transcribed in ${elapsed}ms ` +
             `(audio: ${Math.round(durationMs)}ms, RTF: ${(elapsed / durationMs).toFixed(2)}): "${result.text}"`
         );
 
         return result;
+    }
+
+    private async sendToDeepgram(wavBuffer: Buffer, id: number, startTime: number): Promise<{ text: string, words?: any[] }> {
+        const apiKey = getSettings().deepgramApiKey;
+        const model = getSettings().deepgramModel || 'nova-3';
+        if (!apiKey) {
+            throw new Error('Deepgram API Key is missing. Please set it in Settings.');
+        }
+
+        debugLog(`[Deepgram #${id}] sending ${(wavBuffer.length / 1024).toFixed(1)} KB WAV to Deepgram Cloud (Model: ${model})...`);
+        const { request } = await import('https');
+        
+        return new Promise((resolve, reject) => {
+            const req = request(
+                `https://api.deepgram.com/v1/listen?model=${model}&smart_format=true&language=en`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${apiKey}`,
+                        'Content-Type': 'audio/wav',
+                        'Content-Length': wavBuffer.length
+                    },
+                    timeout: 30_000,
+                },
+                (res) => {
+                    let data = '';
+                    res.on('data', (chunk) => { data += chunk; });
+                    res.on('end', () => {
+                        try {
+                            if (res.statusCode && res.statusCode >= 400) {
+                                return reject(new Error(`Deepgram Error ${res.statusCode}: ${data}`));
+                            }
+                            
+                            const json = JSON.parse(data);
+                            let text = '';
+                            let words: any[] = [];
+                            
+                            if (json.results && json.results.channels && json.results.channels[0]) {
+                                const alt = json.results.channels[0].alternatives[0];
+                                if (alt) {
+                                    text = alt.transcript || '';
+                                    words = alt.words || [];
+                                }
+                            }
+                            
+                            const elapsed = Date.now() - startTime;
+                            debugLog(`[Deepgram #${id}] transcribed in ${elapsed}ms: "${text}"`);
+                            resolve({ text: text.trim(), words: words.length > 0 ? words : undefined });
+                        } catch (err) {
+                            reject(new Error(`Failed to parse Deepgram response: ${err}`));
+                        }
+                    });
+                }
+            );
+
+            req.on('error', (err) => {
+                reject(new Error(`Deepgram API request failed: ${err.message}`));
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Deepgram API request timed out'));
+            });
+
+            req.write(wavBuffer);
+            req.end();
+        });
     }
 
     getStatus() {
