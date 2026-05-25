@@ -63,7 +63,12 @@ function resolveWhisperBasePath(): string {
     if (app.isPackaged) {
         return path.join(process.resourcesPath, 'whisper');
     }
-    return path.join(app.getAppPath(), 'native', 'whisper');
+    // During Playwright tests, app.getAppPath() is often dist-electron/main
+    let basePath = app.getAppPath();
+    if (basePath.includes('dist-electron')) {
+        basePath = path.join(basePath, '..', '..');
+    }
+    return path.join(basePath, 'native', 'whisper');
 }
 
 // ─── Server-backed Whisper Transcriber ───────────────────────────────────────

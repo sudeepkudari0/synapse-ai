@@ -129,3 +129,114 @@ export async function getAppMetrics(electronApp: ElectronApplication) {
         };
     });
 }
+
+// ─── New Helpers for Mock Interview Testing ─────────────────────────
+
+/**
+ * Wait for the conversation to have at least N blocks.
+ */
+export async function waitForConversationLength(
+    window: Page,
+    minLength: number,
+    timeout = 10000
+): Promise<void> {
+    await window.waitForFunction(
+        (min) => {
+            const store = (window as any).__TEST_SESSION_STORE__;
+            if (!store) return false;
+            return store.getState().conversation.length >= min;
+        },
+        minLength,
+        { timeout }
+    );
+}
+
+/**
+ * Wait for a specific speaker to have a new block.
+ */
+export async function waitForSpeakerBlock(
+    window: Page,
+    speaker: 'user' | 'interviewer',
+    timeout = 10000
+): Promise<void> {
+    const currentCount = await window.evaluate((sp: string) => {
+        const store = (window as any).__TEST_SESSION_STORE__;
+        if (!store) return 0;
+        return store.getState().conversation.filter((b: any) => b.speaker === sp).length;
+    }, speaker);
+
+    await window.waitForFunction(
+        ({ speaker, count }) => {
+            const store = (window as any).__TEST_SESSION_STORE__;
+            if (!store) return false;
+            return store.getState().conversation.filter((b: any) => b.speaker === speaker).length > count;
+        },
+        { speaker, count: currentCount },
+        { timeout }
+    );
+}
+
+/**
+ * Measure the execution time of an async function.
+ */
+export async function measureLatency<T>(
+    fn: () => Promise<T>
+): Promise<{ result: T; latencyMs: number }> {
+    const start = performance.now();
+    const result = await fn();
+    return { result, latencyMs: performance.now() - start };
+}
+
+/**
+ * Read the Zustand session store state from the renderer.
+ */
+export async function getRendererSessionState(window: Page) {
+    return await window.evaluate(() => {
+        const store = (window as any).__TEST_SESSION_STORE__;
+        if (!store) return null;
+        const state = store.getState();
+        return {
+            conversationLength: state.conversation.length,
+            isRecording: state.isRecording,
+            sessionTime: state.sessionTime,
+            conversation: state.conversation.map((b: any) => ({
+                id: b.id,
+                speaker: b.speaker,
+                text: b.text,
+            })),
+        };
+    });
+}
+
+/**
+ * Read the Zustand answer store state from the renderer.
+ */
+export async function getRendererAnswerState(window: Page) {
+    return await window.evaluate(() => {
+        const store = (window as any).__TEST_ANSWER_STORE__;
+        if (!store) return null;
+        const state = store.getState();
+        return {
+            answersCount: state.answers.length,
+            isGenerating: state.isGenerating,
+            candidateQuestionsCount: state.candidateQuestions.length,
+            candidateQuestions: state.candidateQuestions.map((q: any) => ({
+                id: q.id,
+                text: q.text?.slice(0, 100),
+                confidence: q.confidence,
+                status: q.status,
+                hasAnswer: !!(q.answer && q.answer.length > 0),
+            })),
+        };
+    });
+}
+
+/**
+ * Take a timestamped screenshot for debugging.
+ */
+export async function takeDebugScreenshot(window: Page, label: string): Promise<string> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const screenshotPath = `e2e/screenshots/${label}-${timestamp}.png`;
+    await window.screenshot({ path: screenshotPath, fullPage: true });
+    return screenshotPath;
+}

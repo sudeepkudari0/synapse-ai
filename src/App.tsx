@@ -11,6 +11,7 @@ import { analyzeDelivery } from './lib/delivery-analyzer';
 import { getCodeAnalysisPrompt } from './lib/prompts/templates/code-analysis';
 import { TimestampDeduplicator } from './lib/timestamp-deduplicator';
 import { filterHallucinations } from './lib/hallucination-filter';
+import { EchoSuppressor } from './lib/echo-suppressor';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 import type { ChatBlock, Answer } from './state';
 
@@ -69,6 +70,7 @@ function App(): JSX.Element {
     const isTranscribingRef = useRef(false);
     const userStabilizerRef = useRef(new TimestampDeduplicator());
     const interviewerStabilizerRef = useRef(new TimestampDeduplicator());
+    const echoSuppressorRef = useRef(new EchoSuppressor());
     const conversationRef = useRef<ChatBlock[]>([]);
     const autoDetectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -158,6 +160,19 @@ function App(): JSX.Element {
                         }
 
                         const text = filterRes.filteredText || result.text;
+
+                        // ─── Cross-channel echo suppression ───
+                        // System audio captures ALL audio output, including the user's
+                        // voice echoed back from the meeting app. Detect and suppress these.
+                        if (nextItem.source === 'user') {
+                            echoSuppressorRef.current.recordUserTranscription(text);
+                        } else if (nextItem.source === 'interviewer') {
+                            if (echoSuppressorRef.current.isEcho(text)) {
+                                continue; // Skip — this is the user's voice on the system audio channel
+                            }
+                            echoSuppressorRef.current.recordInterviewerTranscription(text);
+                        }
+
                         const stabilizer = nextItem.source === 'user' ? userStabilizerRef.current : interviewerStabilizerRef.current;
 
                         setConversation((prev: ChatBlock[]) => {
@@ -215,6 +230,27 @@ function App(): JSX.Element {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isModelLoaded, transcribe, setConversation]);
+
+    // Expose transcription handler for E2E testing
+    if (typeof window !== 'undefined') {
+        (window as any).__TEST_PROCESS_TRANSCRIPTION__ = (source: SpeakerSource, text: string) => {
+            const filterRes = filterHallucinations(text);
+            if (!filterRes.valid) return false;
+            
+            const filteredText = filterRes.filteredText || text;
+            setConversation((prev: ChatBlock[]) => {
+                const newConv = [...prev];
+                newConv.push({
+                    id: Date.now().toString() + Math.random().toString(),
+                    speaker: source,
+                    text: filteredText,
+                    timestamp: new Date()
+                });
+                return newConv;
+            });
+            return true;
+        };
+    }
 
     // ─── Detection Window ───
     // Instead of auto-answering, we now just ADD the question to the candidates list.

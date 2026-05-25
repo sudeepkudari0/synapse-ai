@@ -43,6 +43,11 @@ function loadEnvFile() {
 }
 loadEnvFile();
 
+if (process.env.NODE_ENV === 'test') {
+    // Expose require for Playwright's electronApp.evaluate which lacks require() and import()
+    (global as any).__TEST_REQUIRE__ = require;
+}
+
 // Enable Web Speech API in Electron (even though we're not using it, good for compatibility)
 app.commandLine.appendSwitch('enable-speech-dispatcher');
 

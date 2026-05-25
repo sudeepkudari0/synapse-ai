@@ -29,11 +29,11 @@ export function createMainWindow(): BrowserWindow {
         x: 0,
         y: 0,
         frame: false,
-        transparent: true,
+        transparent: process.env.NODE_ENV !== 'test',
         alwaysOnTop: true,
-        skipTaskbar: true,
+        skipTaskbar: process.env.NODE_ENV !== 'test',
         resizable: false,
-        backgroundColor: '#00000000',
+        backgroundColor: process.env.NODE_ENV === 'test' ? '#1a1a1a' : '#00000000',
         show: false,
         focusable: true,
         hasShadow: false,
@@ -48,7 +48,7 @@ export function createMainWindow(): BrowserWindow {
 
     // Use app.isPackaged for more reliable production detection
     const isPackaged = app.isPackaged;
-    const isDev = !isPackaged && process.env.NODE_ENV !== 'production';
+    const isDev = !isPackaged && process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test';
 
     // Grant media permissions for audio capture
     mainWindow.webContents.session.setPermissionRequestHandler(
