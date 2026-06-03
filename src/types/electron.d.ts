@@ -1,92 +1,149 @@
 // Global type declarations for renderer process
 
 interface WhisperAPI {
-    loadModel: (modelName?: string) => Promise<{ success: boolean; error?: string }>;
-    transcribe: (audioData: Float32Array, prompt?: string) => Promise<{
-        success: boolean;
-        text: string;
-        words?: { word: string; start: number; end: number }[];
-        error?: string;
-    }>;
-    getStatus: () => Promise<{
-        success: boolean;
-        isLoaded: boolean;
-        modelPath?: string;
-        error?: string;
-    }>;
-    downloadModel: (modelName: string, onProgress: (progress: number) => void) => Promise<{ success: boolean; error?: string }>;
+  loadModel: (
+    modelName?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  transcribe: (
+    audioData: Float32Array,
+    prompt?: string,
+  ) => Promise<{
+    success: boolean;
+    text: string;
+    words?: { word: string; start: number; end: number }[];
+    error?: string;
+  }>;
+  getStatus: () => Promise<{
+    success: boolean;
+    isLoaded: boolean;
+    modelPath?: string;
+    error?: string;
+  }>;
+  downloadModel: (
+    modelName: string,
+    onProgress: (progress: number) => void,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface DesktopSource {
-    id: string;
-    name: string;
-    type: 'screen' | 'window';
+  id: string;
+  name: string;
+  type: "screen" | "window";
 }
 
 interface ElectronAPI {
-    platform: string;
-    getDesktopSources: () => Promise<DesktopSource[]>;
-    setIgnoreMouseEvents: (ignore: boolean) => Promise<{ success: boolean; error?: string }>;
-    moveWindow: (deltaX: number, deltaY: number) => Promise<{ success: boolean; error?: string }>;
-    whisper: WhisperAPI;
-    captureScreen: (sourceId?: string) => Promise<{ success: boolean; imageData?: string; error?: string }>;
-    analyzeScreen: (imageData: string, prompt?: string, context?: string) => Promise<{
-        success: boolean;
-        answer?: string;
-        extractedText?: string;
-        error?: string;
+  platform: string;
+  getDesktopSources: () => Promise<DesktopSource[]>;
+  setIgnoreMouseEvents: (
+    ignore: boolean,
+  ) => Promise<{ success: boolean; error?: string }>;
+  moveWindow: (
+    deltaX: number,
+    deltaY: number,
+  ) => Promise<{ success: boolean; error?: string }>;
+  whisper: WhisperAPI;
+  captureScreen: (
+    sourceId?: string,
+  ) => Promise<{ success: boolean; imageData?: string; error?: string }>;
+  analyzeScreen: (
+    imageData: string,
+    prompt?: string,
+    context?: string,
+  ) => Promise<{
+    success: boolean;
+    answer?: string;
+    extractedText?: string;
+    error?: string;
+  }>;
+  captureAndAnalyze: (prompt?: string) => Promise<{
+    success: boolean;
+    answer?: string;
+    error?: string;
+  }>;
+  llmGenerate: (
+    options: {
+      systemPrompt: string;
+      prompt: string;
+      temperature?: number;
+      maxTokens?: number;
+      stream?: boolean;
+      imageData?: string;
+    },
+    onChunk?: (chunk: string) => void,
+  ) => Promise<{
+    success: boolean;
+    text?: string;
+    streaming?: boolean;
+    error?: string;
+  }>;
+  quitApp: () => Promise<{ success: boolean; error?: string }>;
+
+  getSettings: () => Promise<{
+    success: boolean;
+    settings?: any;
+    error?: string;
+  }>;
+  updateSettings: (
+    settings: any,
+  ) => Promise<{ success: boolean; settings?: any; error?: string }>;
+  getAvailableModels: () => Promise<{
+    success: boolean;
+    models?: string[];
+    error?: string;
+  }>;
+  downloadMoonshineModel: (
+    modelName: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  checkSttServer: (
+    engine: "whisper" | "moonshine" | "deepgram",
+  ) => Promise<{ exists: boolean; error?: string }>;
+  testOllama: () => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
+  llmGetAvailableModels: (
+    provider: "gemini" | "groq",
+  ) => Promise<{ success: boolean; models?: string[]; error?: string }>;
+
+  // Storage API
+  session: {
+    save: (session: any) => Promise<{ success: boolean; error?: string }>;
+    load: (
+      id: string,
+    ) => Promise<{ success: boolean; session?: any; error?: string }>;
+    list: () => Promise<{ success: boolean; sessions?: any[]; error?: string }>;
+    delete: (id: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  profile: {
+    save: (profile: any) => Promise<{ success: boolean; error?: string }>;
+    load: () => Promise<{ success: boolean; profile?: any; error?: string }>;
+  };
+
+  careerHub: {
+    saveJobs: (jobs: any[]) => Promise<{ success: boolean; error?: string }>;
+    loadJobs: () => Promise<{ success: boolean; jobs?: any[]; error?: string }>;
+    saveProfile: (
+      profile: any,
+    ) => Promise<{ success: boolean; error?: string }>;
+    loadProfile: () => Promise<{
+      success: boolean;
+      profile?: any;
+      error?: string;
     }>;
-    captureAndAnalyze: (prompt?: string) => Promise<{
-        success: boolean;
-        answer?: string;
-        error?: string;
-    }>;
-    llmGenerate: (
-        options: {
-            systemPrompt: string;
-            prompt: string;
-            temperature?: number;
-            maxTokens?: number;
-            stream?: boolean;
-            imageData?: string;
-        },
-        onChunk?: (chunk: string) => void
-    ) => Promise<{
-        success: boolean;
-        text?: string;
-        streaming?: boolean;
-        error?: string;
-    }>;
-    quitApp: () => Promise<{ success: boolean; error?: string }>;
+    runJobspy: (
+      options: any,
+    ) => Promise<{ success: boolean; data?: any; error?: string }>;
+  };
 
-    getSettings: () => Promise<{ success: boolean; settings?: any; error?: string }>;
-    updateSettings: (settings: any) => Promise<{ success: boolean; settings?: any; error?: string }>;
-    getAvailableModels: () => Promise<{ success: boolean; models?: string[]; error?: string }>;
-    downloadMoonshineModel: (modelName: string) => Promise<{ success: boolean; error?: string }>;
-    checkSttServer: (engine: 'whisper' | 'moonshine' | 'deepgram') => Promise<{ exists: boolean; error?: string }>;
-    testOllama: () => Promise<{ success: boolean; message?: string; error?: string }>;
-    llmGetAvailableModels: (provider: 'gemini' | 'groq') => Promise<{ success: boolean; models?: string[]; error?: string }>;
-
-    // Storage API
-    session: {
-        save: (session: any) => Promise<{ success: boolean; error?: string }>;
-        load: (id: string) => Promise<{ success: boolean; session?: any; error?: string }>;
-        list: () => Promise<{ success: boolean; sessions?: any[]; error?: string }>;
-        delete: (id: string) => Promise<{ success: boolean; error?: string }>;
-    };
-
-    profile: {
-        save: (profile: any) => Promise<{ success: boolean; error?: string }>;
-        load: () => Promise<{ success: boolean; profile?: any; error?: string }>;
-    };
-
-    onShortcut: (channel: string, callback: () => void) => () => void;
+  onShortcut: (channel: string, callback: () => void) => () => void;
 }
 
 declare global {
-    interface Window {
-        electronAPI: ElectronAPI;
-    }
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
 }
 
-export { };
+export {};

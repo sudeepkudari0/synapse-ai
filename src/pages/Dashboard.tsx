@@ -1,99 +1,146 @@
-/**
- * Dashboard — Module Launcher
- * Landing screen for Synapse AI with two module cards.
- */
-
-import { useNavigationStore } from '../state/navigation-store';
+import { useNavigationStore, type AppModule } from '../state/navigation-store';
+import { CareerHub } from './CareerHub/CareerHub';
+import { SettingsPanel } from '../components/SettingsPanel/SettingsPanel';
 
 export function Dashboard() {
-  const setActiveModule = useNavigationStore((s) => s.setActiveModule);
+  const { activeModule, setActiveModule } = useNavigationStore();
+
+  const NAV_ITEMS: { id: AppModule; label: string; icon: string }[] = [
+    { id: 'dashboard', label: 'Overview', icon: '🏠' },
+    { id: 'career-hub', label: 'Career Hub', icon: '💼' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  ];
 
   return (
-    <div className="dashboard-root">
-      <div className="dashboard-container">
-        {/* Header */}
-        <div className="dashboard-header">
-          <div className="dashboard-logo">
-            <div className="logo-icon">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="16" r="14" fill="url(#logoGrad)" />
-                <path d="M10 16.5L14 20.5L22 12.5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                <defs>
-                  <linearGradient id="logoGrad" x1="2" y1="2" x2="30" y2="30">
-                    <stop stopColor="#6366f1" />
-                    <stop offset="1" stopColor="#8b5cf6" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-            <div>
-              <h1 className="dashboard-title">Synapse AI</h1>
-              <p className="dashboard-subtitle">Your Career Intelligence Platform</p>
-            </div>
+    <div className="flex h-screen bg-[#09090b] text-slate-200 font-sans overflow-hidden select-none" style={{ WebkitAppRegion: 'drag' } as any}>
+      {/* Sidebar */}
+      <div className="w-64 flex flex-col bg-[#09090b] border-r border-white/5 pt-10" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="px-6 mb-10 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">Synapse AI</h1>
           </div>
         </div>
 
-        {/* Module Cards */}
-        <div className="module-grid">
-          {/* Interview Assistant */}
-          <button
-            className="module-card module-interview"
-            onClick={() => setActiveModule('interview')}
-          >
-            <div className="module-icon-wrapper module-icon-interview">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            </div>
-            <div className="module-content">
-              <h2 className="module-name">Interview Assistant</h2>
-              <p className="module-desc">
-                Real-time AI-powered interview help with live transcription,
-                question detection, and intelligent answer generation.
-              </p>
-              <div className="module-tags">
-                <span className="module-tag">Live Transcription</span>
-                <span className="module-tag">AI Answers</span>
-                <span className="module-tag">Screen Analysis</span>
-              </div>
-            </div>
-            <div className="module-arrow">→</div>
-          </button>
+        <nav className="flex-1 px-4 space-y-1.5">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Menu</div>
+          
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveModule(item.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                activeModule === item.id 
+                  ? 'bg-indigo-500/15 text-indigo-300 font-medium' 
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+              }`}
+            >
+              <span className="text-lg">{item.icon}</span>
+              <span className="text-sm">{item.label}</span>
+            </button>
+          ))}
+          
+          <div className="mt-8 mb-4">
+             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Tools</div>
+             <button
+                onClick={() => setActiveModule('interview')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-slate-400 hover:bg-indigo-500/10 hover:text-indigo-300 group`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">🎙️</span>
+                  <span className="text-sm">Interview Assistant</span>
+                </div>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-400">↗</span>
+              </button>
+          </div>
+        </nav>
 
-          {/* Career Hub */}
-          <button
-            className="module-card module-career"
-            onClick={() => setActiveModule('career-hub')}
-          >
-            <div className="module-icon-wrapper module-icon-career">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-              </svg>
+        <div className="p-4 border-t border-white/5">
+          <div className="text-[11px] text-center text-slate-600 font-medium">
+            Version 2.0.0
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 bg-[#0f1117] rounded-tl-2xl border-t border-l border-white/5 relative overflow-hidden" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="absolute inset-0 overflow-auto">
+          {activeModule === 'dashboard' && <OverviewPanel />}
+          {activeModule === 'career-hub' && <CareerHub />}
+          {activeModule === 'settings' && (
+            <div className="p-8 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <SettingsPanel onClose={() => setActiveModule('dashboard')} onSettingsChanged={() => {}} />
             </div>
-            <div className="module-content">
-              <h2 className="module-name">Career Hub</h2>
-              <p className="module-desc">
-                Search jobs, manage applications, tailor resumes with AI,
-                generate cover letters, and export polished PDFs.
-              </p>
-              <div className="module-tags">
-                <span className="module-tag">Job Search</span>
-                <span className="module-tag">Resume Tailoring</span>
-                <span className="module-tag">Cover Letters</span>
-                <span className="module-tag">PDF Export</span>
-              </div>
-            </div>
-            <div className="module-arrow">→</div>
-          </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OverviewPanel() {
+  const { setActiveModule } = useNavigationStore();
+
+  return (
+    <div className="p-10 max-w-5xl mx-auto animate-in fade-in duration-700">
+      <div className="mb-12">
+        <h2 className="text-3xl font-bold text-slate-100 tracking-tight mb-2">Welcome Back</h2>
+        <p className="text-slate-400">Here's a quick overview of your career workspace.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Career Hub Card */}
+        <div 
+          onClick={() => setActiveModule('career-hub')}
+          className="group cursor-pointer relative overflow-hidden rounded-3xl bg-gradient-to-b from-white/[0.04] to-transparent border border-white/10 p-8 hover:border-indigo-500/30 transition-all duration-500 hover:shadow-[0_0_40px_rgba(99,102,241,0.1)]"
+        >
+          <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+             <span className="text-8xl">💼</span>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center mb-6 shadow-lg shadow-blue-500/20">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-bold text-slate-200 mb-3">Career Hub</h3>
+          <p className="text-slate-400 text-sm leading-relaxed mb-6 max-w-[280px]">
+            Manage job applications, tailor your resumes with AI, generate cover letters, and track your progress in one place.
+          </p>
+          <div className="text-indigo-400 text-sm font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
+            Enter Workspace <span>→</span>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="dashboard-footer">
-          <p>Built with ♥ for career seekers everywhere</p>
+        {/* Interview Assistant Card */}
+        <div 
+          onClick={() => setActiveModule('interview')}
+          className="group cursor-pointer relative overflow-hidden rounded-3xl bg-gradient-to-b from-white/[0.04] to-transparent border border-white/10 p-8 hover:border-purple-500/30 transition-all duration-500 hover:shadow-[0_0_40px_rgba(168,85,247,0.1)]"
+        >
+          <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+             <span className="text-8xl">🎙️</span>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center mb-6 shadow-lg shadow-purple-500/20">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-bold text-slate-200 mb-3">Interview Assistant</h3>
+          <p className="text-slate-400 text-sm leading-relaxed mb-6 max-w-[280px]">
+            Launch the real-time AI overlay to get live transcriptions, question detection, and intelligent answer suggestions during interviews.
+          </p>
+          <div className="text-purple-400 text-sm font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
+            Launch Overlay <span className="rotate-[-45deg]">→</span>
+          </div>
         </div>
       </div>
     </div>

@@ -43,7 +43,7 @@ export function buildFilename(fullName: string): string {
   const formatted = parts
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
     .join('_');
-  return `${formatted}_Tailored_CV.pdf`;
+  return `${formatted}_Resume.pdf`;
 }
 
 async function buildBlob(resumeText: string, masterResume: MasterResume): Promise<Blob> {

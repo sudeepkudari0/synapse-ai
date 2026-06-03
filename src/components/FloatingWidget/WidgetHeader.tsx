@@ -1,4 +1,4 @@
-import { Mic, MicOff, Camera, Crop, Sparkles, ChevronDown, ChevronUp, X, Loader2, Settings, MessageCircle, History, GraduationCap, Code2 } from 'lucide-react';
+import { Mic, MicOff, Camera, Crop, Sparkles, ChevronDown, ChevronUp, X, Loader2, MessageCircle, History, GraduationCap, Code2, Home } from 'lucide-react';
 import { IconButton } from '../shared/IconButton';
 import { PulsingDot } from '../shared/PulsingDot';
 import { useDrag } from '../../hooks/useDrag';
@@ -16,7 +16,7 @@ interface WidgetHeaderProps {
     onCaptureScreen: () => void;
     onRegionCapture: () => void;
     onGenerateAnswer: () => void;
-    onOpenSettings: () => void;
+
     onToggleChat: () => void;
     onToggleHistory: () => void;
     onTogglePractice: () => void;
@@ -36,7 +36,7 @@ export function WidgetHeader({
     onCaptureScreen,
     onRegionCapture,
     onGenerateAnswer,
-    onOpenSettings,
+
     onToggleChat,
     onToggleHistory,
     onTogglePractice,
@@ -145,13 +145,15 @@ export function WidgetHeader({
                     <GraduationCap className="w-4 h-4" />
                 </IconButton>
 
-                {/* Settings */}
+                {/* Back to Dashboard */}
                 <IconButton
-                    id="btn-open-settings"
-                    onClick={onOpenSettings}
-                    title="Settings"
+                    id="btn-back-dashboard"
+                    onClick={() => {
+                        (window as any).electronAPI?.switchToDashboard?.();
+                    }}
+                    title="Back to Dashboard"
                 >
-                    <Settings className="w-4 h-4" />
+                    <Home className="w-4 h-4" />
                 </IconButton>
 
                 {/* History */}

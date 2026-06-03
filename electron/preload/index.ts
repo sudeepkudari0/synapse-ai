@@ -196,6 +196,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         loadJobs: async () => ipcRenderer.invoke('career:jobs:load'),
         saveProfile: async (profile: any) => ipcRenderer.invoke('career:profile:save', profile),
         loadProfile: async () => ipcRenderer.invoke('career:profile:load'),
+        runJobspy: async (options: any) => ipcRenderer.invoke('career:run-jobspy', options),
+        fetchUrl: async (url: string) => ipcRenderer.invoke('career:fetch-url', url),
     },
 
     // Shell API

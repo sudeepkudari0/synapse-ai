@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigationStore, type AppModule } from './state/navigation-store';
 import { Dashboard } from './pages/Dashboard';
-import { CareerHub } from './pages/CareerHub/CareerHub';
+
 import { useJobStore } from './career/state/career-store';
 import App from './App';
 
@@ -66,14 +66,10 @@ export function AppRouter() {
 
   if (!initialized) return null;
 
-  switch (activeModule) {
-    case 'dashboard':
-      return <Dashboard />;
-    case 'interview':
-      return <App />;
-    case 'career-hub':
-      return <CareerHub />;
-    default:
-      return <Dashboard />;
+  if (activeModule === 'interview') {
+    return <App />;
   }
+
+  // Dashboard acts as the Main Shell for 'dashboard', 'career-hub', and 'settings'
+  return <Dashboard />;
 }

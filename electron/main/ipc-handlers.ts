@@ -619,6 +619,73 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
         }
     });
 
+    // ── Career Hub: JobSpy Scraper ───────────────────────────────────────
+    ipcMain.handle(IPC_CHANNELS.CAREER_RUN_JOBSPY, async (event, options) => {
+        try {
+            const { runJobspySearch } = await import('./jobspy/runner');
+            const data = await runJobspySearch(options);
+            return { success: true, data };
+        } catch (error) {
+            console.error('IPC: JobSpy run failed:', error);
+            return { success: false, error: String(error) };
+        }
+    });
+
+
+    // ── Career Hub: Fetch URL ────────────────────────────────────────────
+    ipcMain.handle('career:fetch-url', async (event, url: string) => {
+        try {
+            return new Promise((resolve) => {
+                const win = new BrowserWindow({
+                    show: false,
+                    width: 1024,
+                    height: 768,
+                    webPreferences: {
+                        nodeIntegration: false,
+                        contextIsolation: true,
+                        sandbox: true
+                    }
+                });
+
+                win.webContents.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+                let resolved = false;
+
+                const finish = async () => {
+                    if (resolved) return;
+                    resolved = true;
+                    try {
+                        const html = await win.webContents.executeJavaScript('document.documentElement.outerHTML');
+                        win.destroy();
+                        resolve({ success: true, html });
+                    } catch (e) {
+                        if (!win.isDestroyed()) win.destroy();
+                        resolve({ success: false, error: String(e) });
+                    }
+                };
+
+                win.webContents.on('did-finish-load', () => {
+                    // Give client-side frameworks a moment to render
+                    setTimeout(finish, 3000);
+                });
+
+                // Hard timeout
+                setTimeout(finish, 15000);
+
+                win.loadURL(url).catch((err) => {
+                    if (!resolved) {
+                        resolved = true;
+                        if (!win.isDestroyed()) win.destroy();
+                        resolve({ success: false, error: String(err) });
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('IPC: Fetch URL failed:', error);
+            return { success: false, error: String(error) };
+        }
+    });
+
     // ── Shell: Open External URL ─────────────────────────────────────────
     ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, async (event, url: string) => {
         try {

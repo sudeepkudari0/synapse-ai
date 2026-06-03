@@ -141,7 +141,7 @@ export default function ResumeDocument({ resume }: ResumeDocumentProps) {
         ))}
 
         {resume.projects && resume.projects.length > 0 ? (
-          <>
+          <View wrap={true}>
             <SectionHeader title="Projects" />
             {resume.projects.map((proj, i) => {
               const url = proj.url ? (proj.url.startsWith("http") ? proj.url : `https://${proj.url}`) : "";
@@ -157,7 +157,7 @@ export default function ResumeDocument({ resume }: ResumeDocumentProps) {
                 </View>
               );
             })}
-          </>
+          </View>
         ) : null}
 
         <SectionHeader title="Skills" />

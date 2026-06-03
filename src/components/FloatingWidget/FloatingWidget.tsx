@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { WidgetHeader } from './WidgetHeader';
 import { TranscriptPanel } from './TranscriptPanel';
 import { AnswerSuggestions } from './AnswerSuggestions';
-import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
+
 import { ChatPanel } from '../ChatPanel/ChatPanel';
 import { SessionHistory } from '../SessionHistory/SessionHistory';
 import { SessionDetail } from '../SessionHistory/SessionDetail';
@@ -16,7 +16,6 @@ import './FloatingWidget.css';
 interface FloatingWidgetProps {
     // State
     isExpanded: boolean;
-    isSettingsOpen: boolean;
     isChatOpen: boolean;
     isHistoryOpen: boolean;
     isPracticeOpen: boolean;
@@ -44,11 +43,9 @@ interface FloatingWidgetProps {
     onRegionCapture: () => void;
     onGenerateAnswer: () => void;
     onClearTranscript: () => void;
-    onToggleSettings: () => void;
     onToggleChat: () => void;
     onToggleHistory: () => void;
     onTogglePractice: () => void;
-    onSettingsChanged: () => void;
     onClose: () => void;
 
     // New actions
@@ -61,7 +58,6 @@ interface FloatingWidgetProps {
 
 export function FloatingWidget({
     isExpanded,
-    isSettingsOpen,
     isChatOpen,
     isHistoryOpen,
     isPracticeOpen,
@@ -85,11 +81,9 @@ export function FloatingWidget({
     onRegionCapture,
     onGenerateAnswer,
     onClearTranscript,
-    onToggleSettings,
     onToggleChat,
     onToggleHistory,
     onTogglePractice,
-    onSettingsChanged,
     onClose,
     onPickQuestion,
     onDismissCandidate,
@@ -176,7 +170,7 @@ export function FloatingWidget({
         prevCandidateCount.current = candidateQuestions.length;
     }, [candidateQuestions.length, isExpanded, onToggleExpanded]);
 
-    const isFullPagePanel = isSettingsOpen || isChatOpen || isHistoryOpen || isPracticeOpen;
+    const isFullPagePanel = isChatOpen || isHistoryOpen || isPracticeOpen;
 
     const handleClearAll = () => {
         onClearDetectedQuestions();
@@ -219,7 +213,6 @@ export function FloatingWidget({
                     onCaptureScreen={onCaptureScreen}
                     onRegionCapture={onRegionCapture}
                     onGenerateAnswer={onGenerateAnswer}
-                    onOpenSettings={onToggleSettings}
                     onToggleChat={onToggleChat}
                     onToggleHistory={onToggleHistory}
                     onTogglePractice={onTogglePractice}
@@ -231,12 +224,7 @@ export function FloatingWidget({
                 <div className="widget-body">
                     {isFullPagePanel ? (
                         <div className="flex flex-col flex-1 h-full w-full overflow-hidden">
-                            {isSettingsOpen ? (
-                                <SettingsPanel 
-                                    onClose={onToggleSettings} 
-                                    onSettingsChanged={onSettingsChanged} 
-                                />
-                            ) : isChatOpen ? (
+                            {isChatOpen ? (
                                 <ChatPanel onClose={onToggleChat} />
                             ) : isHistoryOpen ? (
                                 selectedSession ? (

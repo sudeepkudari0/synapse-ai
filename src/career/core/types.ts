@@ -104,7 +104,9 @@ export interface Job {
   fitScore?: number;
   scoreReasoning?: string;
   tailoredResumePath?: string;
+  tailoredResumeText?: string;
   coverLetterPath?: string;
+  coverLetterText?: string;
   appliedAt?: string;
   applicationUrl?: string;
   tags?: string[];

@@ -28,13 +28,12 @@ function App(): JSX.Element {
         addAnswer, updateAnswer,
         addCandidateQuestion, removeCandidateQuestion, clearCandidateQuestions, setCandidateStatus,
         updateCandidateAnswer,
-        addDetectedQuestion, updateQuestionOption, selectOption,
-        clearDetectedQuestions, setQuestionGenerating,
+        clearDetectedQuestions,
     } = useAnswerStore();
 
     const {
-        isExpanded, isSettingsOpen, isChatOpen, isHistoryOpen, isPracticeOpen, isCapturing, isCodeMode, useBulletPoints,
-        toggleExpanded, setExpanded, toggleSettings, toggleChat, toggleHistory, togglePractice, setCapturing,
+        isExpanded, isChatOpen, isHistoryOpen, isPracticeOpen, isCapturing, isCodeMode, useBulletPoints,
+        toggleExpanded, setExpanded, toggleChat, toggleHistory, togglePractice, setCapturing,
     } = useUIStore();
 
     // ─── App-level state ───
@@ -323,7 +322,7 @@ function App(): JSX.Element {
     );
 
     // ─── User picks a candidate question → generate single inline answer ───
-    const handlePickQuestion = async (candidateId: string, questionText: string) => {
+    const handlePickQuestion = async (candidateId: string, _questionText: string) => {
         // Mark the candidate as "answering"
         setCandidateStatus(candidateId, 'answering');
         updateCandidateAnswer(candidateId, { answer: '', isStreaming: true });
@@ -579,30 +578,7 @@ function App(): JSX.Element {
         };
     }, [conversation, answers.length]);
 
-    const handleSettingsChanged = async () => {
-        try {
-            await loadModel(true);
-            // Refresh preferences
-            const settingsRes = await window.electronAPI.getSettings();
-            if (settingsRes.success && settingsRes.settings) {
-                const mode = settingsRes.settings.questionDetectionMode || 'heuristic';
-                setAutoDetectionEnabled(mode !== 'manual');
-                const engine = settingsRes.settings.sttEngine || 'whisper';
-                if (engine === 'deepgram') {
-                    setSttEngine('Deepgram');
-                    setSttModel(settingsRes.settings.deepgramModel || 'nova-3');
-                } else if (engine === 'moonshine') {
-                    setSttEngine('Moonshine');
-                    setSttModel(settingsRes.settings.moonshineModel || 'MEDIUM_STREAMING');
-                } else {
-                    setSttEngine('Whisper.cpp');
-                    setSttModel(settingsRes.settings.whisperModel || 'small.en');
-                }
-            }
-        } catch (error) {
-            console.error('Failed to reload model after settings change:', error);
-        }
-    };
+
 
     // ─── Region Capture ───
     const [regionSelectState, setRegionSelectState] = useState<{ screenshotData: string } | null>(null);
@@ -663,7 +639,6 @@ function App(): JSX.Element {
         <>
             <FloatingWidget
                 isExpanded={isExpanded}
-                isSettingsOpen={isSettingsOpen}
                 isChatOpen={isChatOpen}
                 isHistoryOpen={isHistoryOpen}
                 isPracticeOpen={isPracticeOpen}
@@ -687,15 +662,13 @@ function App(): JSX.Element {
                 onRegionCapture={handleRegionCapture}
                 onGenerateAnswer={handleGenerateAnswer}
                 onClearTranscript={handleClearTranscript}
-                onToggleSettings={toggleSettings}
                 onToggleChat={toggleChat}
                 onToggleHistory={toggleHistory}
                 onTogglePractice={togglePractice}
-                onSettingsChanged={handleSettingsChanged}
                 onClose={handleClose}
                 onPickQuestion={handlePickQuestion}
                 onDismissCandidate={removeCandidateQuestion}
-                onSelectOption={selectOption}
+                onSelectOption={() => {}}
                 onClearDetectedQuestions={handleClearAll}
                 onToggleAutoDetection={handleToggleAutoDetection}
             />
