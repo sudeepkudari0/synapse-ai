@@ -78,4 +78,13 @@ export const IPC_CHANNELS = {
     SESSION_DELETE: 'session:delete',
     PROFILE_SAVE: 'profile:save',
     PROFILE_LOAD: 'profile:load',
+    // Career Hub
+    CAREER_JOBS_SAVE: 'career:jobs:save',
+    CAREER_JOBS_LOAD: 'career:jobs:load',
+    CAREER_PROFILE_SAVE: 'career:profile:save',
+    CAREER_PROFILE_LOAD: 'career:profile:load',
+    // Window management
+    SWITCH_TO_INTERVIEW: 'window:switch-interview',
+    SWITCH_TO_DASHBOARD: 'window:switch-dashboard',
+    OPEN_EXTERNAL: 'shell:open-external',
 } as const;

@@ -1,4 +1,4 @@
-import { ipcMain, app, globalShortcut } from 'electron';
+import { ipcMain, app, globalShortcut, shell } from 'electron';
 import { getTranscriber } from './whisper/transcriber';
 import { IPC_CHANNELS } from '../types/ipc';
 import { BrowserWindow } from 'electron';
@@ -568,6 +568,62 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
         try {
             const { loadProfile } = await import('./storage/profile-store');
             return { success: true, profile: loadProfile() };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    // ── Career Hub: Job Storage ──────────────────────────────────────────
+    ipcMain.handle(IPC_CHANNELS.CAREER_JOBS_SAVE, async (event, jobs: any[]) => {
+        try {
+            const { JSONStore } = await import('./storage/store');
+            const store = new JSONStore('career-hub');
+            store.write('jobs.json', jobs);
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.CAREER_JOBS_LOAD, async () => {
+        try {
+            const { JSONStore } = await import('./storage/store');
+            const store = new JSONStore('career-hub');
+            const jobs = store.read('jobs.json') || [];
+            return { success: true, jobs };
+        } catch (error) {
+            return { success: false, error: String(error), jobs: [] };
+        }
+    });
+
+    // ── Career Hub: Career Profile Storage ───────────────────────────────
+    ipcMain.handle(IPC_CHANNELS.CAREER_PROFILE_SAVE, async (event, profile: any) => {
+        try {
+            const { JSONStore } = await import('./storage/store');
+            const store = new JSONStore('career-hub');
+            store.write('career-profile.json', profile);
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.CAREER_PROFILE_LOAD, async () => {
+        try {
+            const { JSONStore } = await import('./storage/store');
+            const store = new JSONStore('career-hub');
+            const profile = store.read('career-profile.json');
+            return { success: true, profile };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    });
+
+    // ── Shell: Open External URL ─────────────────────────────────────────
+    ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, async (event, url: string) => {
+        try {
+            await shell.openExternal(url);
+            return { success: true };
         } catch (error) {
             return { success: false, error: String(error) };
         }

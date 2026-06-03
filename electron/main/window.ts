@@ -1,29 +1,101 @@
 import { BrowserWindow, app, screen } from 'electron';
 import path from 'path';
 
-// Full-screen transparent overlay — widget sizing is CSS-driven in the renderer.
-// This allows dynamic content height and proper full-screen region capture.
-
 // In CommonJS, __dirname is available natively
 declare const __dirname: string;
 
-export function createMainWindow(): BrowserWindow {
-    // Cover the entire work area so the widget can grow dynamically
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-
-    // Resolve icon – in dev it's at project root; in production electron-builder
-    // copies buildResources into the app directory.
+function resolveIcon(): string | undefined {
     const possibleIconPaths = [
         path.join(app.getAppPath(), 'build', 'icon.ico'),
         path.join(process.resourcesPath, 'icon.ico'),
         path.join(__dirname, '../../build/icon.ico'),
     ];
-    const iconPath = possibleIconPaths.find(p => {
+    return possibleIconPaths.find(p => {
         try { return require('fs').existsSync(p); } catch { return false; }
     });
+}
 
-    const mainWindow = new BrowserWindow({
+function getAppUrl(hash?: string): string {
+    const isPackaged = app.isPackaged;
+    const isDev = !isPackaged && process.env.NODE_ENV !== 'production';
+    if (isDev) {
+        return `http://localhost:5173${hash ? `#${hash}` : ''}`;
+    }
+    return ''; // file loading handled separately
+}
+
+function loadWindow(win: BrowserWindow, hash?: string): void {
+    const isPackaged = app.isPackaged;
+    const isDev = !isPackaged && process.env.NODE_ENV !== 'production';
+    if (isDev) {
+        win.loadURL(getAppUrl(hash));
+        win.webContents.openDevTools({ mode: 'detach' });
+    } else {
+        const indexPath = path.join(__dirname, '../../dist/index.html');
+        win.loadFile(indexPath, hash ? { hash } : undefined);
+    }
+}
+
+/**
+ * Dashboard Window — Normal opaque window for Dashboard & Career Hub.
+ * This is the FIRST window the user sees on app launch.
+ */
+export function createDashboardWindow(): BrowserWindow {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    const w = Math.min(1100, screenWidth - 100);
+    const h = Math.min(750, screenHeight - 60);
+
+    const dashWindow = new BrowserWindow({
+        width: w,
+        height: h,
+        minWidth: 600,
+        minHeight: 500,
+        center: true,
+        frame: false,
+        transparent: false,
+        alwaysOnTop: false,
+        skipTaskbar: false,
+        resizable: true,
+        backgroundColor: '#0f1117',
+        show: false,
+        focusable: true,
+        icon: resolveIcon(),
+        titleBarStyle: 'hidden',
+        titleBarOverlay: process.platform === 'darwin' ? {
+            color: '#0f1117',
+            symbolColor: '#94a3b8',
+            height: 36,
+        } : false,
+        webPreferences: {
+            preload: path.join(__dirname, '../preload/index.cjs'),
+            contextIsolation: true,
+            nodeIntegration: false,
+        },
+    });
+
+    dashWindow.once('ready-to-show', () => {
+        dashWindow.show();
+    });
+
+    loadWindow(dashWindow, 'dashboard');
+
+    dashWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('Dashboard failed to load:', errorCode, errorDescription);
+    });
+
+    return dashWindow;
+}
+
+/**
+ * Overlay Window — Full-screen transparent overlay for Interview Assistant.
+ * Created ONLY when the user selects Interview Assistant from the Dashboard.
+ */
+export function createOverlayWindow(): BrowserWindow {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+
+    const overlayWindow = new BrowserWindow({
         width: screenWidth,
         height: screenHeight,
         x: 0,
@@ -37,7 +109,7 @@ export function createMainWindow(): BrowserWindow {
         show: false,
         focusable: true,
         hasShadow: false,
-        icon: iconPath,
+        icon: resolveIcon(),
         webPreferences: {
             preload: path.join(__dirname, '../preload/index.cjs'),
             contextIsolation: true,
@@ -46,59 +118,34 @@ export function createMainWindow(): BrowserWindow {
     });
 
 
-    // Use app.isPackaged for more reliable production detection
-    const isPackaged = app.isPackaged;
-    const isDev = !isPackaged && process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test';
-
     // Grant media permissions for audio capture
-    mainWindow.webContents.session.setPermissionRequestHandler(
+    overlayWindow.webContents.session.setPermissionRequestHandler(
         (webContents, permission, callback) => {
-            if (permission === 'media') {
-                callback(true);
-            } else {
-                callback(false);
-            }
+            callback(permission === 'media');
         }
     );
 
-    // Show window when ready to prevent blank/invisible window
-    mainWindow.once('ready-to-show', () => {
-        mainWindow.show();
-        // Enable click-through by default — transparent areas pass clicks to underlying apps.
-        // The renderer toggles this off when cursor enters interactive UI elements.
-        mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    overlayWindow.once('ready-to-show', () => {
+        overlayWindow.show();
+        // Enable click-through — transparent areas pass clicks to underlying apps
+        overlayWindow.setIgnoreMouseEvents(true, { forward: true });
 
-        // Apply content protection after the window is shown.
-        // On Windows, calling this before the window is fully visible often fails
-        // to register the WDA_EXCLUDEFROMCAPTURE flag correctly.
         setTimeout(() => {
-            if (!mainWindow.isDestroyed()) {
-                // Toggle to ensure the OS registers the change
-                mainWindow.setContentProtection(false);
-                mainWindow.setContentProtection(true);
+            if (!overlayWindow.isDestroyed()) {
+                overlayWindow.setContentProtection(false);
+                overlayWindow.setContentProtection(true);
             }
         }, 100);
     });
 
-    // Load the app
-    if (isDev) {
-        mainWindow.loadURL('http://localhost:5173');
-        // Open DevTools in development for debugging
-        mainWindow.webContents.openDevTools({ mode: 'detach' });
-    } else {
-        // In production, the path is relative to the app.asar or app folder
-        const indexPath = path.join(__dirname, '../../dist/index.html');
-        mainWindow.loadFile(indexPath);
-    }
+    loadWindow(overlayWindow, 'interview');
 
-    // Log any load failures
-    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-        console.error('Failed to load:', errorCode, errorDescription);
+    overlayWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('Overlay failed to load:', errorCode, errorDescription);
     });
 
-    mainWindow.on('closed', () => {
-        // Dereference handled by caller
-    });
-
-    return mainWindow;
+    return overlayWindow;
 }
+
+// Keep backward compat — old code calls createMainWindow
+export const createMainWindow = createOverlayWindow;

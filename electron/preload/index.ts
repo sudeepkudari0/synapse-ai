@@ -189,4 +189,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
         return () => {};
     },
+
+    // Career Hub APIs
+    careerHub: {
+        saveJobs: async (jobs: any[]) => ipcRenderer.invoke('career:jobs:save', jobs),
+        loadJobs: async () => ipcRenderer.invoke('career:jobs:load'),
+        saveProfile: async (profile: any) => ipcRenderer.invoke('career:profile:save', profile),
+        loadProfile: async () => ipcRenderer.invoke('career:profile:load'),
+    },
+
+    // Shell API
+    openExternal: async (url: string) => ipcRenderer.invoke('shell:open-external', url),
+
+    // Window switching
+    switchToInterview: async () => ipcRenderer.invoke('window:switch-interview'),
+    switchToDashboard: async () => ipcRenderer.invoke('window:switch-dashboard'),
 });

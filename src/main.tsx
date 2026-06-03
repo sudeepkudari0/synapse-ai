@@ -1,7 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import { AppRouter } from './AppRouter';
 import './index.css';
+import './career-hub.css';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
 
 // Expose Zustand stores on window for E2E test access and debugging
@@ -15,6 +16,6 @@ import { filterHallucinations } from './lib/hallucination-filter';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <AppRouter />
   </React.StrictMode>
 );

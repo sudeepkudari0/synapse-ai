@@ -90,12 +90,12 @@ export class WhisperTranscriber {
     private sttEngine: 'whisper' | 'moonshine' | 'deepgram' = 'moonshine';
 
     async initialize(modelName: string = 'small.en'): Promise<void> {
-        const currentEngine = getSettings().sttEngine || 'moonshine';
+        const currentEngine = getSettings().sttEngine || 'deepgram';
         
         let expectedModelPath = '';
         if (currentEngine === 'moonshine') {
             expectedModelPath = getSettings().moonshineModel || 'MEDIUM_STREAMING';
-        } else {
+        } else if (currentEngine === 'whisper') {
             const modelsDir = path.join(app.getPath('userData'), 'whisper-models');
             expectedModelPath = path.join(modelsDir, `ggml-${modelName}.bin`);
         }
@@ -125,18 +125,22 @@ export class WhisperTranscriber {
         const exeName = this.sttEngine === 'moonshine' ? 'moonshine-server.exe' : 'whisper-server.exe';
         this.serverExePath = path.join(basePath, exeName);
         
-        if (this.sttEngine !== 'moonshine') {
+        if (this.sttEngine === 'whisper') {
             if (!fs.existsSync(this.modelPath)) {
-                throw new Error(`Model file not found at ${this.modelPath}. Please download it in settings.`);
+                serverLog(`⚠ Model file not found at ${this.modelPath} — local STT unavailable. Use Deepgram instead.`);
+                this.isInitialized = false;
+                return;
             }
         }
 
-        // Validate server binary exists
+        // Validate server binary exists — warn gracefully instead of crashing
         if (!fs.existsSync(this.serverExePath)) {
-            throw new Error(
-                `${exeName} not found at ${this.serverExePath}. ` +
-                `Please compile the server first.`
+            serverLog(
+                `⚠ ${exeName} not found at ${this.serverExePath}. ` +
+                `Local STT unavailable. Switch to Deepgram in settings.`
             );
+            this.isInitialized = false;
+            return;
         }
 
         // Start the server and wait for it to become ready
