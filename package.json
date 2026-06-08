@@ -63,6 +63,15 @@
         ]
       },
       {
+        "from": "native/jobspy",
+        "to": "jobspy",
+        "filter": [
+          "**/*",
+          "!venv/**/*",
+          "!__pycache__/**/*"
+        ]
+      },
+      {
         "from": "build/icon.ico",
         "to": "icon.ico"
       },
