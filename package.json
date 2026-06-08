@@ -1,6 +1,10 @@
 {
   "name": "synapse-ai",
   "version": "1.0.0",
+  "author": {
+    "name": "Sudeep Kudari",
+    "email": "sudeepkudari0@gmail.com"
+  },
   "description": "AI-powered interview assistant with real-time screen analysis and intelligent suggestions",
   "main": "dist-electron/main/index.js",
   "scripts": {
@@ -10,6 +14,7 @@
     "build:all": "bun run build && bun run build:electron",
     "dist": "bun run build:all && electron-builder",
     "dist:win": "bun run build:all && electron-builder --win",
+    "dist:linux": "bun run build:all && electron-builder --linux",
     "start": "electron .",
     "preview": "vite preview",
     "postinstall": "electron-builder install-app-deps",
@@ -37,7 +42,6 @@
     "vite",
     "overlay"
   ],
-  "author": "",
   "license": "ISC",
   "build": {
     "appId": "com.synapse.ai",
@@ -88,6 +92,13 @@
       ],
       "icon": "build/icon.ico",
       "signAndEditExecutable": false
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office",
+      "executableName": "synapse-ai"
     },
     "nsis": {
       "oneClick": false,
