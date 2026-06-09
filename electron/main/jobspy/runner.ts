@@ -30,12 +30,24 @@ function getJobspyDir(): string {
 }
 
 /**
+ * Resolve the writable directory where virtual environment should be created.
+ * - In development: inside <project>/native/jobspy (to keep dev self-contained)
+ * - In production:  inside Electron's userData/jobspy (to bypass read-only filesystem restrictions in packages like AppImage)
+ */
+function getVenvDir(nativeDir: string): string {
+  if (app.isPackaged) {
+    return path.join(app.getPath("userData"), "jobspy", "venv");
+  }
+  return path.join(nativeDir, "venv");
+}
+
+/**
  * Get the path to the Python binary inside the venv.
  */
-function getVenvPython(nativeDir: string): string {
+function getVenvPython(venvDir: string): string {
   return process.platform === "win32"
-    ? path.join(nativeDir, "venv", "Scripts", "python.exe")
-    : path.join(nativeDir, "venv", "bin", "python");
+    ? path.join(venvDir, "Scripts", "python.exe")
+    : path.join(venvDir, "bin", "python");
 }
 
 /**
@@ -68,7 +80,7 @@ function findSystemPython(): string | null {
  * Auto-provision the venv and install requirements.
  * Runs synchronously so the caller can await it once and retry.
  */
-function setupVenv(nativeDir: string): void {
+function setupVenv(nativeDir: string, venvDir: string): void {
   const systemPython = findSystemPython();
   if (!systemPython) {
     throw new Error(
@@ -83,11 +95,12 @@ function setupVenv(nativeDir: string): void {
     );
   }
 
-  const venvDir = path.join(nativeDir, "venv");
+  const workingDir = path.dirname(venvDir);
+  fs.mkdirSync(workingDir, { recursive: true });
 
-  console.log("[JobSpy Setup] Creating venv with:", systemPython);
+  console.log("[JobSpy Setup] Creating venv at:", venvDir, "with:", systemPython);
   execSync(`${systemPython} -m venv "${venvDir}"`, {
-    cwd: nativeDir,
+    cwd: workingDir,
     timeout: 60_000,
     stdio: "pipe",
   });
@@ -99,7 +112,7 @@ function setupVenv(nativeDir: string): void {
 
   console.log("[JobSpy Setup] Installing requirements…");
   execSync(`"${pip}" install -r "${requirementsPath}"`, {
-    cwd: nativeDir,
+    cwd: workingDir,
     timeout: 300_000, // 5 min – first install can be slow
     stdio: "pipe",
   });
@@ -110,17 +123,19 @@ function setupVenv(nativeDir: string): void {
 export function runJobspySearch(options: JobspyOptions): Promise<any> {
   return new Promise((resolve, reject) => {
     const nativeDir = getJobspyDir();
-    const venvBin = getVenvPython(nativeDir);
+    const venvDir = getVenvDir(nativeDir);
+    const venvBin = getVenvPython(venvDir);
     const scriptPath = path.join(nativeDir, "scraper.py");
+    const workingDir = path.dirname(venvDir);
 
     // Auto-setup the venv if it doesn't exist yet
     if (!fs.existsSync(venvBin)) {
       console.log(
         "[JobSpy Runner] Venv not found, auto-provisioning…",
-        nativeDir,
+        venvDir,
       );
       try {
-        setupVenv(nativeDir);
+        setupVenv(nativeDir, venvDir);
       } catch (err: any) {
         return reject(
           new Error(
@@ -150,7 +165,7 @@ export function runJobspySearch(options: JobspyOptions): Promise<any> {
     // Increase maxBuffer to 50MB because JSON output can be large
     exec(
       command,
-      { maxBuffer: 1024 * 1024 * 50, cwd: nativeDir },
+      { maxBuffer: 1024 * 1024 * 50, cwd: workingDir },
       (error, stdout, stderr) => {
         if (error) {
           console.error("[JobSpy Runner] Error:", stderr || error.message);
