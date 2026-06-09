@@ -2,10 +2,23 @@
  * Job Manager — Save, view, and manage jobs
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useJobStore } from "../../career/state/career-store";
 import type { Job, JobStatus } from "../../career/core/types";
 import { useNavigationStore } from "@/state/navigation-store";
+import { DataTable } from "../../components/ui/DataTable";
+import { ColumnDef } from "@tanstack/react-table";
+import {
+  ExternalLink,
+  Sparkles,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Building2,
+  Calendar,
+  Briefcase
+} from "lucide-react";
 
 const STATUS_OPTIONS: {
   value: JobStatus | "all";
@@ -67,9 +80,218 @@ export function JobManager() {
   const handleStatusChange = (jobId: string, newStatus: JobStatus) => {
     updateJob(jobId, { status: newStatus });
     const updatedJobs = jobs.map((j) =>
-      j.id === jobId ? { ...j, status: newStatus } : j,
+      j.id === jobId ? { ...j, status: newStatus } : j
     );
     (window as any).electronAPI?.careerHub?.saveJobs?.(updatedJobs);
+  };
+
+  // Define table columns
+  const columns = useMemo<ColumnDef<Job>[]>(() => [
+    {
+      id: "expander",
+      header: () => null,
+      cell: ({ row }) => {
+        const isExpanded = expandedJobId === row.original.id;
+        return (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedJobId(isExpanded ? null : row.original.id);
+            }}
+            className="p-1 hover:bg-white/5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            {isExpanded ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </button>
+        );
+      },
+    },
+    {
+      accessorKey: "title",
+      header: "Role / Company",
+      cell: ({ row }) => {
+        const job = row.original;
+        return (
+          <div className="flex flex-col">
+            <span className="font-semibold text-slate-100">{job.title}</span>
+            <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+              <Building2 className="w-3.5 h-3.5 text-slate-500" />
+              {job.company}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "location",
+      header: "Location",
+      cell: ({ row }) => {
+        const job = row.original;
+        return (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {job.location && (
+              <span className="text-xs text-slate-300 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                {job.location}
+              </span>
+            )}
+            {job.isRemote && (
+              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md">
+                Remote
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "fitScore",
+      header: "Fit Score",
+      cell: ({ row }) => {
+        const score = row.original.fitScore;
+        if (score === undefined || score === null) {
+          return <span className="text-slate-500 text-xs">—</span>;
+        }
+
+        let colorClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+        if (score >= 7) {
+          colorClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+        } else if (score >= 5) {
+          colorClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+        }
+
+        return (
+          <span className={`px-2 py-0.5 text-xs font-semibold border rounded-md ${colorClass}`}>
+            {score}/10
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "dateFound",
+      header: "Date Added",
+      cell: ({ row }) => {
+        const date = new Date(row.original.dateFound);
+        return (
+          <span className="text-xs text-slate-400 flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+            {date.toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const job = row.original;
+        const currentStatusOpt =
+          STATUS_OPTIONS.find((o) => o.value === job.status) || STATUS_OPTIONS[1];
+        return (
+          <select
+            value={job.status}
+            onChange={(e) => handleStatusChange(job.id, e.target.value as JobStatus)}
+            onClick={(e) => e.stopPropagation()}
+            className="px-2 py-1 text-xs bg-white/5 border border-white/10 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500/50 cursor-pointer transition-colors"
+            style={{ color: currentStatusOpt.color }}
+          >
+            {STATUS_OPTIONS.filter((o) => o.value !== "all").map((opt) => (
+              <option
+                key={opt.value}
+                value={opt.value}
+                className="bg-[#0f1117] text-slate-300"
+              >
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: () => <div className="text-right">Actions</div>,
+      cell: ({ row }) => {
+        const job = row.original;
+        return (
+          <div
+            className="flex items-center justify-end gap-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {job.url && (
+              <button
+                onClick={() => {
+                  if ((window as any).electronAPI?.openExternal) {
+                    (window as any).electronAPI.openExternal(job.url);
+                  } else {
+                    window.open(job.url, "_blank");
+                  }
+                }}
+                className="p-1.5 hover:bg-white/5 text-slate-400 hover:text-slate-200 rounded-lg transition-all"
+                title="View Posting"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={() => {
+                const navStore = useNavigationStore.getState();
+                const jobStoreState = useJobStore.getState();
+                jobStoreState.setSelectedJob(job.id);
+                navStore.setCareerTab("tailor");
+              }}
+              className="p-1.5 hover:bg-indigo-500/10 text-indigo-400 hover:text-indigo-300 rounded-lg transition-all"
+              title="Tailor Resume"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {
+                removeJob(job.id);
+                const updatedJobs = jobs.filter((j) => j.id !== job.id);
+                (window as any).electronAPI?.careerHub?.saveJobs?.(updatedJobs);
+              }}
+              className="p-1.5 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 rounded-lg transition-all"
+              title="Remove Job"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ], [jobs, expandedJobId]);
+
+  const renderExpandedRow = (job: Job) => {
+    return (
+      <div className="space-y-3 text-slate-300 text-xs">
+        {job.description && (
+          <div>
+            <h4 className="font-semibold text-slate-400 mb-1 flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-slate-500" />
+              Description
+            </h4>
+            <p className="whitespace-pre-line leading-relaxed text-slate-400 max-h-48 overflow-y-auto pr-2 bg-white/[0.01] p-3 rounded-lg border border-white/5">
+              {job.description}
+            </p>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-slate-500 border-t border-white/5 pt-2">
+          <span>Found: {new Date(job.dateFound).toLocaleString()}</span>
+          <span>Source: {job.source || "Manual"}</span>
+          {job.updatedAt && (
+            <span>Updated: {new Date(job.updatedAt).toLocaleString()}</span>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -130,7 +352,7 @@ export function JobManager() {
 
       {/* Add Job Form */}
       {showAddForm && (
-        <form className="jm-add-form" onSubmit={handleAddJob}>
+        <form className="jm-add-form animate-in fade-in slide-in-from-top-3 duration-200" onSubmit={handleAddJob}>
           <div className="jm-form-grid">
             <input name="title" placeholder="Job Title *" required />
             <input name="company" placeholder="Company *" required />
@@ -160,112 +382,16 @@ export function JobManager() {
             <div className="jm-empty-icon">📋</div>
             <h3>No jobs yet</h3>
             <p>
-              Add jobs manually or use the Job Search tab to discover
-              opportunities.
+              Add jobs manually or use the Job Search tab to discover opportunities.
             </p>
           </div>
         ) : (
-          filteredJobs.map((job) => (
-            <div
-              key={job.id}
-              className={`jm-job-card ${expandedJobId === job.id ? "jm-job-expanded" : ""}`}
-            >
-              <div
-                className="jm-job-header"
-                onClick={() =>
-                  setExpandedJobId(expandedJobId === job.id ? null : job.id)
-                }
-              >
-                <div className="jm-job-info">
-                  <h3 className="jm-job-title">{job.title}</h3>
-                  <p className="jm-job-company">
-                    {job.company} · {job.location} {job.isRemote ? "🏠" : ""}
-                  </p>
-                </div>
-                <div className="jm-job-actions">
-                  <select
-                    className="jm-status-select"
-                    value={job.status}
-                    onChange={(e) =>
-                      handleStatusChange(job.id, e.target.value as JobStatus)
-                    }
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {STATUS_OPTIONS.filter((o) => o.value !== "all").map(
-                      (opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                  {job.fitScore && (
-                    <span
-                      className={`jm-score jm-score-${job.fitScore >= 7 ? "high" : job.fitScore >= 5 ? "mid" : "low"}`}
-                    >
-                      {job.fitScore}/10
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {expandedJobId === job.id && (
-                <div className="jm-job-details">
-                  {job.url && (
-                    <a
-                      href={job.url}
-                      className="jm-job-url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      🔗 View Original Posting
-                    </a>
-                  )}
-                  {job.description && (
-                    <div className="jm-job-desc">
-                      <h4>Description</h4>
-                      <p>
-                        {job.description.slice(0, 500)}
-                        {job.description.length > 500 ? "..." : ""}
-                      </p>
-                    </div>
-                  )}
-                  <div className="jm-job-meta">
-                    <span>
-                      Found: {new Date(job.dateFound).toLocaleDateString()}
-                    </span>
-                    <span>Source: {job.source}</span>
-                  </div>
-                  <div className="jm-job-bottom-actions">
-                    <button
-                      className="jm-action-btn jm-action-tailor"
-                      onClick={() => {
-                        // Navigate to tailor tab with this job pre-loaded
-                        const navStore = useNavigationStore.getState();
-                        const jobStoreState = useJobStore.getState();
-                        jobStoreState.setSelectedJob(job.id);
-                        navStore.setCareerTab("tailor");
-                      }}
-                    >
-                      ✨ Tailor Resume
-                    </button>
-                    <button
-                      className="jm-action-btn jm-action-delete"
-                      onClick={() => {
-                        removeJob(job.id);
-                        const updatedJobs = jobs.filter((j) => j.id !== job.id);
-                        (window as any).electronAPI?.careerHub?.saveJobs?.(
-                          updatedJobs,
-                        );
-                      }}
-                    >
-                      🗑 Remove
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
+          <DataTable
+            columns={columns}
+            data={filteredJobs}
+            expandedRowId={expandedJobId}
+            renderExpandedRow={renderExpandedRow}
+          />
         )}
       </div>
 

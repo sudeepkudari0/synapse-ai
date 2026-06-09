@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigationStore, type AppModule } from '../state/navigation-store';
 import { CareerHub } from './CareerHub/CareerHub';
 import { SettingsPanel } from '../components/SettingsPanel/SettingsPanel';
-import { Minus, Square, Copy, X } from 'lucide-react';
+import { Minus, Square, Copy, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export function Dashboard() {
   const { activeModule, setActiveModule } = useNavigationStore();
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     if (!window.electronAPI?.windowControl) return;
@@ -73,57 +74,83 @@ export function Dashboard() {
         </div>
       )}
       {/* Sidebar */}
-      <div className="w-64 flex flex-col bg-[#09090b] border-r border-white/5 pt-10" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        <div className="px-6 mb-10 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
+      <div 
+        className={`flex flex-col bg-[#09090b] border-r border-white/5 pt-10 transition-all duration-300 ${
+          isCollapsed ? 'w-20' : 'w-64'
+        }`} 
+        style={{ WebkitAppRegion: 'no-drag' } as any}
+      >
+        <div className={`mb-10 flex items-center justify-between transition-all duration-300 ${isCollapsed ? 'flex-col gap-4 px-2' : 'px-6'}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 flex-shrink-0">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+            </div>
+            {!isCollapsed && (
+              <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">Synapse AI</h1>
+            )}
           </div>
-          <div>
-            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">Synapse AI</h1>
-          </div>
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-slate-200 transition-colors"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
         </div>
 
-        <nav className="flex-1 px-4 space-y-1.5">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Menu</div>
+        <nav className={`flex-1 space-y-1.5 transition-all duration-300 ${isCollapsed ? 'px-2' : 'px-4'}`}>
+          {!isCollapsed && <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Menu</div>}
           
           {NAV_ITEMS.map(item => (
             <button
               key={item.id}
               onClick={() => setActiveModule(item.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                isCollapsed ? 'justify-center' : ''
+              } ${
                 activeModule === item.id 
                   ? 'bg-indigo-500/15 text-indigo-300 font-medium' 
                   : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               }`}
+              title={isCollapsed ? item.label : undefined}
             >
               <span className="text-lg">{item.icon}</span>
-              <span className="text-sm">{item.label}</span>
+              {!isCollapsed && <span className="text-sm">{item.label}</span>}
             </button>
           ))}
           
-          <div className="mt-8 mb-4">
-             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Tools</div>
+          <div className={isCollapsed ? "mt-4 mb-2" : "mt-8 mb-4"}>
+             {!isCollapsed && <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Tools</div>}
              <button
                 onClick={() => setActiveModule('interview')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-slate-400 hover:bg-indigo-500/10 hover:text-indigo-300 group`}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-slate-400 hover:bg-indigo-500/10 hover:text-indigo-300 group ${
+                  isCollapsed ? 'justify-center' : ''
+                }`}
+                title={isCollapsed ? "Interview Assistant" : undefined}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-lg">🎙️</span>
-                  <span className="text-sm">Interview Assistant</span>
+                  {!isCollapsed && <span className="text-sm">Interview Assistant</span>}
                 </div>
-                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-400">↗</span>
+                {!isCollapsed && <span className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-400">↗</span>}
               </button>
           </div>
         </nav>
 
         <div className="p-4 border-t border-white/5">
-          <div className="text-[11px] text-center text-slate-600 font-medium">
-            Version 2.0.0
-          </div>
+          {!isCollapsed ? (
+            <div className="text-[11px] text-center text-slate-600 font-medium transition-all duration-300">
+              Version 2.0.0
+            </div>
+          ) : (
+            <div className="text-[10px] text-center text-slate-600 font-semibold transition-all duration-300">
+              v2.0
+            </div>
+          )}
         </div>
       </div>
 

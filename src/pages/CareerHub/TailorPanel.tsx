@@ -3,7 +3,7 @@
  * Uses ported cv-tailor core logic via the Electron LLM adapter.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useJobStore } from "../../career/state/career-store";
 import { useTailoringStore } from "../../career/state/career-store";
 import { ElectronLLMProvider } from "../../career/core/llm-adapter";
@@ -14,6 +14,21 @@ import {
   buildFilename,
 } from "../../career/core/pdfGenerator";
 import type { MasterResume, Job } from "../../career/core/types";
+import { DataTable } from "../../components/ui/DataTable";
+import { ColumnDef } from "@tanstack/react-table";
+import {
+  ChevronDown,
+  ChevronUp,
+  Building2,
+  MapPin,
+  Sparkles,
+  RefreshCw,
+  Download,
+  Copy,
+  Check,
+  Loader2,
+  Briefcase,
+} from "lucide-react";
 
 export function TailorPanel() {
   const { jobs, updateJob } = useJobStore();
@@ -35,6 +50,7 @@ export function TailorPanel() {
 
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [copySuccessId, setCopySuccessId] = useState<string | null>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
   // Load master resume from electron store on mount
   useEffect(() => {
@@ -221,6 +237,204 @@ export function TailorPanel() {
     }
   };
 
+  // Define columns for DataTable
+  const columns = useMemo<ColumnDef<Job>[]>(
+    () => [
+      {
+        id: "expander",
+        header: () => null,
+        cell: ({ row }) => {
+          const isExpanded = expandedJobId === row.original.id;
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpandedJobId(isExpanded ? null : row.original.id);
+              }}
+              className="p-1 hover:bg-white/5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          );
+        },
+      },
+      {
+        accessorKey: "title",
+        header: "Role / Company",
+        cell: ({ row }) => {
+          const job = row.original;
+          return (
+            <div className="flex flex-col">
+              <span className="font-semibold text-slate-100">{job.title}</span>
+              <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                {job.company}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "location",
+        header: "Location",
+        cell: ({ row }) => {
+          const job = row.original;
+          return (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {job.location && (
+                <span className="text-xs text-slate-300 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                  {job.location}
+                </span>
+              )}
+              {job.isRemote && (
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md">
+                  Remote
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "source",
+        header: "Source",
+        cell: ({ row }) => {
+          return (
+            <span className="px-2 py-0.5 text-xs bg-white/5 border border-white/10 rounded-md text-slate-300">
+              {row.original.source || "Saved"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: "Tailoring Status",
+        cell: ({ row }) => {
+          const job = row.original;
+          const isTailored = !!job.tailoredResumeText || !!job.coverLetterText;
+          return isTailored ? (
+            <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md">
+              Optimized
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md">
+              Pending
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Actions</div>,
+        cell: ({ row }) => {
+          const job = row.original;
+          const isProcessing = isGenerating && activeJobId === job.id;
+          const isTailored = !!job.tailoredResumeText || !!job.coverLetterText;
+
+          return (
+            <div
+              className="flex items-center justify-end gap-1.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Tailor Button */}
+              <button
+                onClick={() => handleTailorJob(job)}
+                disabled={isGenerating}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  isProcessing
+                    ? "bg-indigo-500/20 border-indigo-500/30 text-indigo-400 cursor-not-allowed"
+                    : isTailored
+                      ? "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                      : "bg-indigo-500 border-indigo-600 text-white hover:bg-indigo-600"
+                }`}
+                title={
+                  isProcessing
+                    ? generatingStatus || "Tailoring..."
+                    : isTailored
+                      ? "Re-Tailor Resume"
+                      : "Tailor Resume"
+                }
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{generatingStatus || "Working..."}</span>
+                  </>
+                ) : isTailored ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+
+              {/* Download PDF Button */}
+              {job.tailoredResumeText && (
+                <button
+                  onClick={() => handleDownloadPDF(job.tailoredResumeText!)}
+                  className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 border border-blue-500/20 rounded-lg transition-all"
+                  title="Download Tailored Resume PDF"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Copy Cover Letter Button */}
+              {job.coverLetterText && (
+                <button
+                  onClick={() => handleCopy(job.id, job.coverLetterText!)}
+                  className={`p-1.5 border rounded-lg transition-all ${
+                    copySuccessId === job.id
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                      : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border-emerald-500/20"
+                  }`}
+                  title="Copy Cover Letter"
+                >
+                  {copySuccessId === job.id ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    [isGenerating, activeJobId, generatingStatus, copySuccessId, expandedJobId],
+  );
+
+  const renderExpandedRow = (job: Job) => {
+    return (
+      <div className="space-y-3 text-slate-300 text-xs">
+        {job.description && (
+          <div>
+            <h4 className="font-semibold text-slate-400 mb-1 flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-slate-500" />
+              Description
+            </h4>
+            <p className="whitespace-pre-line leading-relaxed text-slate-400 max-h-48 overflow-y-auto pr-2 bg-white/[0.01] p-3 rounded-lg border border-white/5">
+              {job.description}
+            </p>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-slate-500 border-t border-white/5 pt-2">
+          <span>Found: {new Date(job.dateFound).toLocaleString()}</span>
+          <span>Source: {job.source || "Manual"}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="tailor-panel js-dashboard">
       {/* Header section */}
@@ -274,13 +488,10 @@ export function TailorPanel() {
       )}
 
       {/* Saved Jobs Grid */}
-      <div className="js-glass-panel" style={{ marginBottom: "24px" }}>
-        <div className="js-results-header">
-          <h3 className="js-results-title">Saved Jobs Ready for Tailoring</h3>
-        </div>
-
+      <div className="space-y-4" style={{ marginBottom: "24px" }}>
         {savedJobs.length === 0 ? (
           <div
+            className="js-glass-panel"
             style={{
               padding: "32px",
               textAlign: "center",
@@ -293,127 +504,12 @@ export function TailorPanel() {
             </p>
           </div>
         ) : (
-          <div className="js-results-grid">
-            {savedJobs.map((job) => {
-              const isProcessing = isGenerating && activeJobId === job.id;
-              const isTailored =
-                !!job.tailoredResumeText || !!job.coverLetterText;
-
-              return (
-                <div
-                  key={job.id}
-                  className="js-result-card"
-                  style={{
-                    border: isProcessing
-                      ? "1px solid rgba(96, 165, 250, 0.5)"
-                      : isTailored
-                        ? "1px solid rgba(74, 222, 128, 0.3)"
-                        : undefined,
-                  }}
-                >
-                  <div className="js-result-site-badge">
-                    {job.source || "Saved"}
-                  </div>
-
-                  <h4 className="js-result-title" title={job.title}>
-                    {job.title}
-                  </h4>
-                  <div className="js-result-company">🏢 {job.company}</div>
-
-                  <div className="js-result-meta">
-                    {job.location && (
-                      <span className="js-result-tag">📍 {job.location}</span>
-                    )}
-                    {job.isRemote && (
-                      <span
-                        className="js-result-tag"
-                        style={{
-                          color: "#4ade80",
-                          borderColor: "rgba(74, 222, 128, 0.3)",
-                        }}
-                      >
-                        🏠 Remote
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="js-result-spacer"></div>
-
-                  <div
-                    className="js-result-actions"
-                    style={{ marginTop: "16px" }}
-                  >
-                    <button
-                      className={`js-btn-primary ${isProcessing ? "tailor-generating" : ""}`}
-                      onClick={() => handleTailorJob(job)}
-                      disabled={isGenerating}
-                      style={{
-                        width: "100%",
-                        justifyContent: "center",
-                        background: isTailored
-                          ? "rgba(255, 255, 255, 0.1)"
-                          : undefined,
-                        color: isTailored ? "#cbd5e1" : undefined,
-                      }}
-                    >
-                      {isProcessing ? (
-                        <span
-                          className="tailor-loading"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                          }}
-                        >
-                          <span className="tailor-spinner" />
-                          {generatingStatus || "Processing..."}
-                        </span>
-                      ) : isTailored ? (
-                        "Re-Tailor"
-                      ) : (
-                        "Tailor"
-                      )}
-                    </button>
-
-                    {job.tailoredResumeText && (
-                      <button
-                        className="js-btn-primary"
-                        style={{
-                          width: "100%",
-                          justifyContent: "center",
-                          marginTop: "8px",
-                          background: "#3b82f6",
-                          borderColor: "#2563eb",
-                        }}
-                        onClick={() =>
-                          handleDownloadPDF(job.tailoredResumeText!)
-                        }
-                      >
-                        Download PDF
-                      </button>
-                    )}
-
-                    {job.coverLetterText && (
-                      <button
-                        className="js-btn-view"
-                        style={{
-                          width: "100%",
-                          justifyContent: "center",
-                          marginTop: "8px",
-                          background: "rgba(74, 222, 128, 0.15)",
-                          color: "#4ade80",
-                          borderColor: "rgba(74, 222, 128, 0.3)",
-                        }}
-                        onClick={() => handleCopy(job.id, job.coverLetterText!)}
-                      >
-                        {copySuccessId === job.id ? "✓ Copied!" : "Copy Letter"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DataTable
+            columns={columns}
+            data={savedJobs}
+            expandedRowId={expandedJobId}
+            renderExpandedRow={renderExpandedRow}
+          />
         )}
       </div>
     </div>
