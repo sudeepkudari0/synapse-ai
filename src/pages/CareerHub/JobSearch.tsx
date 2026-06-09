@@ -9,6 +9,172 @@ const JOB_BOARDS = [
   { id: 'zip_recruiter', name: 'ZipRecruiter', icon: '⚡' },
 ];
 
+const IT_JOBS = [
+  'Software Engineer',
+  'Frontend Developer',
+  'Backend Developer',
+  'Full Stack Engineer',
+  'DevOps Engineer',
+  'Site Reliability Engineer (SRE)',
+  'Mobile Developer',
+  'Machine Learning Engineer',
+  'Data Scientist',
+  'Data Engineer',
+  'Cloud Architect',
+  'Cybersecurity Analyst',
+  'UI/UX Designer',
+  'Product Manager',
+  'QA Automation Engineer',
+  'Database Administrator',
+  'System Administrator'
+];
+
+const IT_LOCATIONS = [
+  'Bangalore',
+  'Hyderabad',
+  'Pune',
+  'Noida',
+  'Chennai',
+  'Gurgaon',
+  'Mumbai',
+  'Delhi',
+  'Kolkata',
+  'Ahmedabad',
+  'Kochi',
+  'Remote'
+];
+
+interface SearchableDropdownProps {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  disabled?: boolean;
+}
+
+function SearchableDropdown({
+  label,
+  placeholder,
+  value,
+  onChange,
+  options,
+  disabled
+}: SearchableDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(value.toLowerCase())
+  );
+
+  return (
+    <div className="js-input-wrapper" style={{ position: 'relative' }}>
+      <label>{label}</label>
+      <div style={{ position: 'relative' }}>
+        <input
+          className="js-input-modern"
+          style={{ width: '100%', paddingRight: '40px' }}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsOpen(true);
+            setFocusedIndex(-1);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onBlur={() => {
+            // Delay closing to allow clicking suggestions
+            setTimeout(() => setIsOpen(false), 200);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setIsOpen(true);
+              setFocusedIndex(prev => Math.min(prev + 1, filteredOptions.length - 1));
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setIsOpen(true);
+              setFocusedIndex(prev => Math.max(prev - 1, 0));
+            } else if (e.key === 'Enter') {
+              if (focusedIndex >= 0 && focusedIndex < filteredOptions.length) {
+                e.preventDefault();
+                onChange(filteredOptions[focusedIndex]);
+                setIsOpen(false);
+              }
+            } else if (e.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+          disabled={disabled}
+        />
+        {/* Toggle Dropdown Button */}
+        <button
+          type="button"
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          style={{
+            position: 'absolute',
+            right: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: 'none',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: disabled ? 'none' : 'auto'
+          }}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              transform: isOpen ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.2s ease',
+            }}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+
+        {/* Floating suggestion list */}
+        {isOpen && filteredOptions.length > 0 && (
+          <div className="js-suggestions" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 99 }}>
+            {filteredOptions.map((opt, idx) => (
+              <button
+                key={opt}
+                type="button"
+                className="js-suggestion"
+                onMouseDown={() => {
+                  onChange(opt);
+                  setIsOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  background: focusedIndex === idx ? 'rgba(99, 102, 241, 0.15)' : 'none',
+                  color: focusedIndex === idx ? '#e2e8f0' : '#94a3b8',
+                }}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function JobSearch() {
   const { jobs: savedJobs, addJob } = useJobStore();
   
@@ -114,27 +280,23 @@ export function JobSearch() {
         </div>
 
         <div className="js-search-form">
-          <div className="js-input-wrapper">
-            <label>Job Title / Keywords</label>
-            <input
-              className="js-input-modern"
-              placeholder="e.g. Software Engineer, React"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              disabled={loading}
-            />
-          </div>
+          <SearchableDropdown
+            label="Job Title / Keywords"
+            placeholder="e.g. Software Engineer, React"
+            value={query}
+            onChange={setQuery}
+            options={IT_JOBS}
+            disabled={loading}
+          />
 
-          <div className="js-input-wrapper">
-            <label>Location</label>
-            <input
-              className="js-input-modern"
-              placeholder="e.g. San Francisco, CA"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              disabled={loading}
-            />
-          </div>
+          <SearchableDropdown
+            label="Location"
+            placeholder="e.g. Bangalore, Hyderabad"
+            value={location}
+            onChange={setLocation}
+            options={IT_LOCATIONS}
+            disabled={loading}
+          />
 
           <div className="js-boards-grid">
             {JOB_BOARDS.map((board) => (
