@@ -37,7 +37,10 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         ollamaBaseUrl: 'http://localhost:11434/v1',
         interviewType: 'general',
         questionDetectionMode: 'hybrid',
-        showDeliveryMetrics: true
+        showDeliveryMetrics: true,
+        useGroqProxy: false,
+        groqProxyBigModel: 'moonshotai/kimi-k2-instruct-0905',
+        groqProxySmallModel: 'llama-3.1-8b-instant'
     });
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [isTesting, setIsTesting] = useState(false);
@@ -185,7 +188,10 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     ollamaBaseUrl: s.ollamaBaseUrl || 'http://localhost:11434/v1',
                     interviewType: s.interviewType || 'general',
                     questionDetectionMode: s.questionDetectionMode || 'hybrid',
-                    showDeliveryMetrics: s.showDeliveryMetrics !== false
+                    showDeliveryMetrics: s.showDeliveryMetrics !== false,
+                    useGroqProxy: s.useGroqProxy || false,
+                    groqProxyBigModel: s.groqProxyBigModel || 'moonshotai/kimi-k2-instruct-0905',
+                    groqProxySmallModel: s.groqProxySmallModel || 'llama-3.1-8b-instant'
                 });
 
                 // Fetch cloud models silently with loaded keys
@@ -816,6 +822,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                             onChange={(e) => setSettings({ ...settings, ollamaModel: e.target.value })}
                                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         >
+                                            <option value="qwen2.5-coder:7b">qwen2.5-coder:7b (Coding & Text - Recommended)</option>
                                             <option value="qwen3-vl:2b">qwen3-vl:2b (Vision - Recommended)</option>
                                             <option value="qwen3-vl:2b-instruct">qwen3-vl:2b-instruct (Vision - Direct)</option>
                                             <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b (Coding & Text)</option>
@@ -842,7 +849,60 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                 </div>
                             </div>
 
-                            <p className="mt-2 text-xs text-zinc-500">
+                            <div className="pt-2 border-t border-zinc-800 mt-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-sm font-semibold text-white">Groq Proxy (for Auto-Apply)</h3>
+                                    <div className="flex items-center">
+                                        <span className="text-xs text-zinc-400 mr-2">Use Groq Proxy</span>
+                                        <button
+                                            onClick={() => setSettings({ ...settings, useGroqProxy: !settings.useGroqProxy })}
+                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                settings.useGroqProxy ? 'bg-indigo-600' : 'bg-zinc-700'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                                    settings.useGroqProxy ? 'translate-x-5' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {settings.useGroqProxy && (
+                                    <div className="space-y-3 mt-2">
+                                        <div>
+                                            <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                Big Model (Agent / Coding)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={settings.groqProxyBigModel}
+                                                onChange={(e) => setSettings({ ...settings, groqProxyBigModel: e.target.value })}
+                                                placeholder="moonshotai/kimi-k2-instruct-0905"
+                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                Small Model (Fallback)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={settings.groqProxySmallModel}
+                                                onChange={(e) => setSettings({ ...settings, groqProxySmallModel: e.target.value })}
+                                                placeholder="llama-3.1-8b-instant"
+                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-zinc-500">
+                                            This routes Claude Code through a local python proxy server to run your Auto Apply tasks using fast Groq models.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <p className="mt-4 text-xs text-zinc-500">
                                 {settings.useOllamaOnly 
                                     ? "Currently strictly using local Ollama. Cloud fallbacks are disabled." 
                                     : "Gemini is the cloud primary. Groq is the cloud fallback. Ollama is the local fallback."}

@@ -56,14 +56,14 @@ export function TailorPanel() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await (
+        const res = await (
           window as any
         ).electronAPI?.careerHub?.loadProfile?.();
-        if (data?.masterResumeYaml) {
-          setMasterResumeYaml(data.masterResumeYaml);
-          setMasterResumeText(data.masterResumeText || "");
+        if (res?.success && res?.profile?.masterResumeYaml) {
+          setMasterResumeYaml(res.profile.masterResumeYaml);
+          setMasterResumeText(res.profile.masterResumeText || "");
           const { load } = await import("js-yaml");
-          const parsed = load(data.masterResumeYaml) as MasterResume;
+          const parsed = load(res.profile.masterResumeYaml) as MasterResume;
           setMasterResume(parsed);
         }
       } catch {
@@ -81,12 +81,24 @@ export function TailorPanel() {
       setMasterResumeYaml(text);
       try {
         const { load } = await import("js-yaml");
-        const parsed = load(text) as MasterResume;
+        const parsed = load(text) as any;
         setMasterResume(parsed);
-        (window as any).electronAPI?.careerHub?.saveProfile?.({
+
+        // Extract and structure profile info from the resume YAML for the auto-apply runner
+        const profileData = {
+          fullName: parsed.name || parsed.personal?.name || "",
+          email: parsed.email || parsed.personal?.email || "",
+          phone: parsed.phone || parsed.personal?.phone || "",
+          location: parsed.location || parsed.personal?.location || "",
+          linkedinUrl: parsed.linkedin || parsed.personal?.linkedin || parsed.linkedinUrl || "",
+          githubUrl: parsed.github || parsed.personal?.github || parsed.githubUrl || "",
+          portfolioUrl: parsed.portfolio || parsed.personal?.portfolio || parsed.portfolioUrl || "",
           masterResumeYaml: text,
-          masterResumeText: "",
-        });
+          masterResumeText: parsed.summary || parsed.personal?.summary || "",
+          updatedAt: new Date().toISOString()
+        };
+
+        await (window as any).electronAPI?.careerHub?.saveProfile?.(profileData);
         setError(null);
       } catch (err: any) {
         setError("Invalid YAML file: " + err.message);

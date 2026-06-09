@@ -24,9 +24,13 @@ export interface AppSettings {
     interviewLanguage: string;
     isESLMode: boolean;
     sttMode: 'vad' | 'chunks';
+    capsolverApiKey: string;
+    useGroqProxy: boolean;
+    groqProxyBigModel: string;
+    groqProxySmallModel: string;
 }
 
-const CURRENT_VERSION = 11;
+const CURRENT_VERSION = 13;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
@@ -50,6 +54,10 @@ const DEFAULT_SETTINGS: AppSettings = {
     interviewLanguage: 'en',
     isESLMode: false,
     sttMode: 'vad',
+    capsolverApiKey: '',
+    useGroqProxy: false,
+    groqProxyBigModel: 'llama-3.3-70b-versatile',
+    groqProxySmallModel: 'llama-3.1-8b-instant',
 };
 
 // Migration map: version number -> transform function
@@ -136,6 +144,28 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
             geminiModel: 'gemini-2.0-flash',
             groqModel: 'llama-3.3-70b-versatile',
             version: 11,
+        };
+    },
+    11: (settings: any) => {
+        // v11 -> v12: Add Groq proxy settings for Claude Code
+        return {
+            ...settings,
+            useGroqProxy: false,
+            groqProxyBigModel: 'moonshotai/kimi-k2-instruct-0905',
+            groqProxySmallModel: 'llama-3.1-8b-instant',
+            version: 12,
+        };
+    },
+    12: (settings: any) => {
+        // v12 -> v13: Replace Moonshot AI models (not supported by Groq) with llama-3.3-70b-versatile and enable useGroqProxy if groqApiKey is present
+        const bigModel = settings.groqProxyBigModel || '';
+        return {
+            ...settings,
+            groqProxyBigModel: (bigModel.includes('moonshot') || bigModel.includes('kimi'))
+                ? 'llama-3.3-70b-versatile'
+                : bigModel || 'llama-3.3-70b-versatile',
+            useGroqProxy: settings.groqApiKey ? true : settings.useGroqProxy,
+            version: 13,
         };
     },
 };

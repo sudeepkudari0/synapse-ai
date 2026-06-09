@@ -136,6 +136,22 @@ interface ElectronAPI {
       options: any,
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
     onSetupStatus: (callback: (status: string) => void) => () => void;
+    fetchUrl: (url: string) => Promise<{ success: boolean; html?: string; error?: string }>;
+    runApply: (options: {
+      job: any;
+      resumePdfBase64: string;
+      resumeText: string;
+      coverLetterText: string;
+      dryRun?: boolean;
+    }) => Promise<{ success: boolean; data?: any; error?: string }>;
+    stopApply: () => Promise<{ success: boolean; error?: string }>;
+    onApplyStatus: (callback: (eventData: {
+      status: string;
+      action?: string;
+      log?: string;
+      cost?: number;
+      screenshot?: string;
+    }) => void) => () => void;
   };
 
   onShortcut: (channel: string, callback: () => void) => () => void;

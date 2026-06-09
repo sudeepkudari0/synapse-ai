@@ -203,6 +203,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
             return () => ipcRenderer.removeListener('career:jobspy-setup-status', handler);
         },
         fetchUrl: async (url: string) => ipcRenderer.invoke('career:fetch-url', url),
+        runApply: async (options: any) => ipcRenderer.invoke('career:run-apply', options),
+        stopApply: async () => ipcRenderer.invoke('career:stop-apply'),
+        onApplyStatus: (callback: (eventData: any) => void) => {
+            const handler = (_event: any, data: any) => callback(data);
+            ipcRenderer.on('career:apply-status', handler);
+            return () => ipcRenderer.removeListener('career:apply-status', handler);
+        },
     },
 
     // Shell API

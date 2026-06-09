@@ -8,7 +8,7 @@
   "description": "AI-powered interview assistant with real-time screen analysis and intelligent suggestions",
   "main": "dist-electron/main/index.js",
   "scripts": {
-    "dev": "concurrently \"vite\" \"bun run build:electron\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "concurrently \"vite\" \"bun run build:all\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json && node build-preload.cjs",
     "build:all": "bun run build && bun run build:electron",

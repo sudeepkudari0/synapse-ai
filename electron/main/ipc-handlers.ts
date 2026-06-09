@@ -633,6 +633,30 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
         }
     });
 
+    // ── Career Hub: Auto-Apply Runner ────────────────────────────────────
+    ipcMain.handle(IPC_CHANNELS.CAREER_RUN_APPLY, async (event, options) => {
+        try {
+            const { runApply } = await import('./apply/runner');
+            const data = await runApply(options, (statusUpdate) => {
+                event.sender.send('career:apply-status', statusUpdate);
+            });
+            return { success: true, data };
+        } catch (error) {
+            console.error('IPC: Auto-Apply run failed:', error);
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle(IPC_CHANNELS.CAREER_STOP_APPLY, async () => {
+        try {
+            const { stopApply } = await import('./apply/runner');
+            return await stopApply();
+        } catch (error) {
+            console.error('IPC: Auto-Apply stop failed:', error);
+            return { success: false, error: String(error) };
+        }
+    });
+
 
     // ── Career Hub: Fetch URL ────────────────────────────────────────────
     ipcMain.handle('career:fetch-url', async (event, url: string) => {

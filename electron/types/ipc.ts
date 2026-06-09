@@ -84,6 +84,8 @@ export const IPC_CHANNELS = {
     CAREER_PROFILE_SAVE: 'career:profile:save',
     CAREER_PROFILE_LOAD: 'career:profile:load',
     CAREER_RUN_JOBSPY: 'career:run-jobspy',
+    CAREER_RUN_APPLY: 'career:run-apply',
+    CAREER_STOP_APPLY: 'career:stop-apply',
     // Window management
     SWITCH_TO_INTERVIEW: 'window:switch-interview',
     SWITCH_TO_DASHBOARD: 'window:switch-dashboard',
