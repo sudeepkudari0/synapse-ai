@@ -127,15 +127,20 @@ export function runJobspySearch(options: JobspyOptions): Promise<any> {
     const venvBin = getVenvPython(venvDir);
     const scriptPath = path.join(nativeDir, "scraper.py");
     const workingDir = path.dirname(venvDir);
+    const sentinelPath = path.join(venvDir, "setup_complete.txt");
 
-    // Auto-setup the venv if it doesn't exist yet
-    if (!fs.existsSync(venvBin)) {
+    // Auto-setup the venv if it doesn't exist yet or is incomplete
+    if (!fs.existsSync(venvBin) || !fs.existsSync(sentinelPath)) {
       console.log(
-        "[JobSpy Runner] Venv not found, auto-provisioning…",
+        "[JobSpy Runner] Venv not found or setup incomplete, auto-provisioning…",
         venvDir,
       );
       try {
+        if (fs.existsSync(venvDir)) {
+          fs.rmSync(venvDir, { recursive: true, force: true });
+        }
         setupVenv(nativeDir, venvDir);
+        fs.writeFileSync(sentinelPath, `completed at ${new Date().toISOString()}`);
       } catch (err: any) {
         return reject(
           new Error(
