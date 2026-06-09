@@ -623,7 +623,9 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
     ipcMain.handle(IPC_CHANNELS.CAREER_RUN_JOBSPY, async (event, options) => {
         try {
             const { runJobspySearch } = await import('./jobspy/runner');
-            const data = await runJobspySearch(options);
+            const data = await runJobspySearch(options, (status) => {
+                event.sender.send('career:jobspy-setup-status', status);
+            });
             return { success: true, data };
         } catch (error) {
             console.error('IPC: JobSpy run failed:', error);

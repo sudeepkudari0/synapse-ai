@@ -21,6 +21,7 @@ export function JobSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<any[]>([]);
+  const [setupStatus, setSetupStatus] = useState<string | null>(null);
 
   const toggleBoard = (id: string) => {
     setSelectedBoards((prev) =>
@@ -34,6 +35,14 @@ export function JobSearch() {
     setLoading(true);
     setError(null);
     setResults([]);
+    setSetupStatus(null);
+
+    let unsubscribeStatus: (() => void) | undefined;
+    if ((window as any).electronAPI?.careerHub?.onSetupStatus) {
+      unsubscribeStatus = (window as any).electronAPI.careerHub.onSetupStatus((status: string) => {
+        setSetupStatus(status);
+      });
+    }
 
     try {
       const response = await (window as any).electronAPI.careerHub.runJobspy({
@@ -59,6 +68,10 @@ export function JobSearch() {
       setError(err.message || 'Failed to communicate with scraper engine.');
     } finally {
       setLoading(false);
+      setSetupStatus(null);
+      if (unsubscribeStatus) {
+        unsubscribeStatus();
+      }
     }
   };
 
@@ -182,7 +195,12 @@ export function JobSearch() {
       {loading && (
         <div className="js-glass-panel js-loading-state">
           <div className="js-spinner-ring"></div>
-          <div className="js-loading-text">Scraping {selectedBoards.length} boards... this takes a few seconds.</div>
+          <div className="js-loading-text">
+            {setupStatus === 'creating_venv' && "Setting up Python Environment (creating venv)... This happens only once."}
+            {setupStatus === 'installing_requirements' && "Installing dependencies (python-jobspy, pandas, beautifulsoup4, tls-client)... This may take up to 2-3 minutes on first run."}
+            {setupStatus === 'searching' && `Scraping ${selectedBoards.length} boards... this takes a few seconds.`}
+            {!setupStatus && `Fetching jobs...`}
+          </div>
         </div>
       )}
 

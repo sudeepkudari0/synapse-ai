@@ -135,6 +135,7 @@ interface ElectronAPI {
     runJobspy: (
       options: any,
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
+    onSetupStatus: (callback: (status: string) => void) => () => void;
   };
 
   onShortcut: (channel: string, callback: () => void) => () => void;

@@ -80,7 +80,7 @@ function findSystemPython(): string | null {
  * Auto-provision the venv and install requirements.
  * Runs synchronously so the caller can await it once and retry.
  */
-function setupVenv(nativeDir: string, venvDir: string): void {
+function setupVenv(nativeDir: string, venvDir: string, onStatusUpdate?: (status: string) => void): void {
   const systemPython = findSystemPython();
   if (!systemPython) {
     throw new Error(
@@ -99,6 +99,7 @@ function setupVenv(nativeDir: string, venvDir: string): void {
   fs.mkdirSync(workingDir, { recursive: true });
 
   console.log("[JobSpy Setup] Creating venv at:", venvDir, "with:", systemPython);
+  onStatusUpdate?.("creating_venv");
   execSync(`${systemPython} -m venv "${venvDir}"`, {
     cwd: workingDir,
     timeout: 60_000,
@@ -111,6 +112,7 @@ function setupVenv(nativeDir: string, venvDir: string): void {
       : path.join(venvDir, "bin", "pip");
 
   console.log("[JobSpy Setup] Installing requirements…");
+  onStatusUpdate?.("installing_requirements");
   execSync(`"${pip}" install -r "${requirementsPath}"`, {
     cwd: workingDir,
     timeout: 300_000, // 5 min – first install can be slow
@@ -120,7 +122,7 @@ function setupVenv(nativeDir: string, venvDir: string): void {
   console.log("[JobSpy Setup] Done.");
 }
 
-export function runJobspySearch(options: JobspyOptions): Promise<any> {
+export function runJobspySearch(options: JobspyOptions, onStatusUpdate?: (status: string) => void): Promise<any> {
   return new Promise((resolve, reject) => {
     const nativeDir = getJobspyDir();
     const venvDir = getVenvDir(nativeDir);
@@ -139,7 +141,7 @@ export function runJobspySearch(options: JobspyOptions): Promise<any> {
         if (fs.existsSync(venvDir)) {
           fs.rmSync(venvDir, { recursive: true, force: true });
         }
-        setupVenv(nativeDir, venvDir);
+        setupVenv(nativeDir, venvDir, onStatusUpdate);
         fs.writeFileSync(sentinelPath, `completed at ${new Date().toISOString()}`);
       } catch (err: any) {
         return reject(
@@ -158,6 +160,8 @@ export function runJobspySearch(options: JobspyOptions): Promise<any> {
         ),
       );
     }
+
+    onStatusUpdate?.("searching");
 
     let command = `"${venvBin}" "${scriptPath}" --query "${options.query}" --location "${options.location}"`;
     if (options.sites) command += ` --sites "${options.sites}"`;
