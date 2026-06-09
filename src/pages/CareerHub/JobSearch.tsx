@@ -69,7 +69,7 @@ function SearchableDropdown({
   );
 
   return (
-    <div className="js-input-wrapper" style={{ position: 'relative' }}>
+    <div className="js-input-wrapper" style={{ position: 'relative', zIndex: isOpen ? 50 : 1 }}>
       <label>{label}</label>
       <div style={{ position: 'relative' }}>
         <input
@@ -83,10 +83,7 @@ function SearchableDropdown({
             setFocusedIndex(-1);
           }}
           onFocus={() => setIsOpen(true)}
-          onBlur={() => {
-            // Delay closing to allow clicking suggestions
-            setTimeout(() => setIsOpen(false), 200);
-          }}
+          onBlur={() => setIsOpen(false)}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') {
               e.preventDefault();
@@ -111,7 +108,10 @@ function SearchableDropdown({
         {/* Toggle Dropdown Button */}
         <button
           type="button"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
+          onMouseDown={(e) => {
+            e.preventDefault(); // Prevent input from blurring
+            if (!disabled) setIsOpen(!isOpen);
+          }}
           style={{
             position: 'absolute',
             right: '12px',
@@ -154,7 +154,8 @@ function SearchableDropdown({
                 key={opt}
                 type="button"
                 className="js-suggestion"
-                onMouseDown={() => {
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Prevent input blur so click handler succeeds
                   onChange(opt);
                   setIsOpen(false);
                 }}
