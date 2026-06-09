@@ -709,6 +709,36 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
             };
         }
     });
+
+    // Window controls
+    ipcMain.handle('window:minimize', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.minimize();
+        return { success: true };
+    });
+
+    ipcMain.handle('window:maximize', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+            if (win.isMaximized()) {
+                win.unmaximize();
+            } else {
+                win.maximize();
+            }
+        }
+        return { success: true };
+    });
+
+    ipcMain.handle('window:close', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.close();
+        return { success: true };
+    });
+
+    ipcMain.handle('window:is-maximized', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        return win ? win.isMaximized() : false;
+    });
 }
 
 /**

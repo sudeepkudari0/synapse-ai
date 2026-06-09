@@ -138,6 +138,14 @@ interface ElectronAPI {
   };
 
   onShortcut: (channel: string, callback: () => void) => () => void;
+
+  windowControl: {
+    minimize: () => Promise<{ success: boolean; error?: string }>;
+    maximize: () => Promise<{ success: boolean; error?: string }>;
+    close: () => Promise<{ success: boolean; error?: string }>;
+    isMaximized: () => Promise<boolean>;
+    onStateChanged: (callback: (state: { isMaximized: boolean }) => void) => () => void;
+  };
 }
 
 declare global {

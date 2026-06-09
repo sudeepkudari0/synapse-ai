@@ -206,4 +206,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Window switching
     switchToInterview: async () => ipcRenderer.invoke('window:switch-interview'),
     switchToDashboard: async () => ipcRenderer.invoke('window:switch-dashboard'),
+
+    // Window controls
+    windowControl: {
+        minimize: async () => ipcRenderer.invoke('window:minimize'),
+        maximize: async () => ipcRenderer.invoke('window:maximize'),
+        close: async () => ipcRenderer.invoke('window:close'),
+        isMaximized: async () => ipcRenderer.invoke('window:is-maximized'),
+        onStateChanged: (callback: (state: { isMaximized: boolean }) => void) => {
+            const handler = (_event: any, data: { isMaximized: boolean }) => callback(data);
+            ipcRenderer.on('window:state-changed', handler);
+            return () => ipcRenderer.removeListener('window:state-changed', handler);
+        }
+    }
 });

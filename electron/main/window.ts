@@ -78,6 +78,14 @@ export function createDashboardWindow(): BrowserWindow {
         dashWindow.show();
     });
 
+    dashWindow.on('maximize', () => {
+        dashWindow.webContents.send('window:state-changed', { isMaximized: true });
+    });
+
+    dashWindow.on('unmaximize', () => {
+        dashWindow.webContents.send('window:state-changed', { isMaximized: false });
+    });
+
     loadWindow(dashWindow, 'dashboard');
 
     dashWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
