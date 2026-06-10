@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { useJobStore } from '../../career/state/career-store';
-import type { Job, JobStatus } from '../../career/core/types';
+import type { JobStatus } from '../../career/core/types';
 
 const COLUMNS: { status: JobStatus; label: string; emoji: string; color: string }[] = [
   { status: 'saved', label: 'Saved', emoji: '💾', color: '#3b82f6' },

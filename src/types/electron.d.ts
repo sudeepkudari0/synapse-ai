@@ -68,6 +68,7 @@ interface ElectronAPI {
       maxTokens?: number;
       stream?: boolean;
       imageData?: string;
+      format?: string;
     },
     onChunk?: (chunk: string) => void,
   ) => Promise<{

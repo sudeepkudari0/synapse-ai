@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Save, CheckCircle } from 'lucide-react';
 import { ProfileSection } from './ProfileSection';
 import { StoryBank } from './StoryBank';

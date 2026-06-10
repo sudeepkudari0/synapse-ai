@@ -22,7 +22,6 @@ export interface TimestampedWord {
 
 export class TimestampDeduplicator {
     private confirmedWords: string[] = [];
-    private lastUtteranceEndTime: number = 0;
     private utteranceCount: number = 0;
 
     /**
@@ -38,8 +37,7 @@ export class TimestampDeduplicator {
      * @returns The full confirmed transcript so far
      */
     addUtteranceWithTimestamps(
-        words: TimestampedWord[],
-        utteranceOffsetMs: number = 0
+        words: TimestampedWord[]
     ): string {
         if (words.length === 0) return this.getText();
 
@@ -53,8 +51,6 @@ export class TimestampDeduplicator {
 
         if (newWords.length > 0) {
             this.confirmedWords.push(...newWords);
-            // Track the end of this utterance for reference
-            this.lastUtteranceEndTime = utteranceOffsetMs + words[words.length - 1].end * 1000;
         }
 
         return this.getText();
@@ -105,7 +101,6 @@ export class TimestampDeduplicator {
     /** Reset all state (e.g., when starting a new recording session). */
     clear(): void {
         this.confirmedWords = [];
-        this.lastUtteranceEndTime = 0;
         this.utteranceCount = 0;
     }
 }

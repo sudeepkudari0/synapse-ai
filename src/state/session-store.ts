@@ -24,7 +24,7 @@ interface SessionState {
     resetSession: () => void;
 }
 
-export const useSessionStore = create<SessionState>((set, get) => ({
+export const useSessionStore = create<SessionState>((set) => ({
     // Initial state
     conversation: [],
     isRecording: false,

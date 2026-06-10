@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePracticeStore } from '../../state/practice-store';
 import { useSessionStore } from '../../state/session-store';
 import { useLLM } from '../../hooks/useLLM';
@@ -14,15 +14,14 @@ export const PracticeSession: React.FC = () => {
         evaluations,
         setPracticeQuestions,
         setCurrentQuestionIndex,
-        nextQuestion,
         addEvaluation,
         updateQuestionAnswer,
         endPractice
     } = usePracticeStore();
 
-    const { conversation, isRecording, setIsRecording } = useSessionStore();
+    const { conversation, isRecording } = useSessionStore();
     const { profile } = useProfile();
-    const { generateFromPromptTemplate, isGenerating } = useLLM();
+    const { generateFromPromptTemplate } = useLLM();
 
     const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
     const [isEvaluating, setIsEvaluating] = useState(false);

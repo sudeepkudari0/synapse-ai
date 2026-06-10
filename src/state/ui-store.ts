@@ -27,7 +27,7 @@ interface UIState {
     toggleBulletPoints: () => void;
 }
 
-export const useUIStore = create<UIState>((set, get) => ({
+export const useUIStore = create<UIState>((set) => ({
     // Initial state
     isExpanded: false,
     isSettingsOpen: false,

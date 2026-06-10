@@ -249,7 +249,7 @@ export function useMixedAudioRecorder(
                         preSpeechPadMs: 500,
                         redemptionMs: 600,
                         submitUserSpeechOnPause: true,
-                        onFrameProcessed: (probabilities, frame) => {
+                        onFrameProcessed: (_probabilities, frame) => {
                             // Compute real-time level (RMS) for bouncing waveform visualizer in VAD mode
                             let sum = 0;
                             for (let i = 0; i < frame.length; i++) {

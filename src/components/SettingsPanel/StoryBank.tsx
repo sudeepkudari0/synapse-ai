@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useProfileStore, type Story } from '../../state/profile-store';
 import { useLLM } from '../../hooks/useLLM';
-import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Tag, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
 
 const STORY_TAGS = ['leadership', 'conflict', 'failure', 'teamwork', 'innovation', 'initiative', 'growth', 'technical', 'customer', 'deadline'];
 

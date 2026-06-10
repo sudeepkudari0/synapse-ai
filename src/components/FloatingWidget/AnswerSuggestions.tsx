@@ -193,10 +193,8 @@ function CandidateCard({
 
 export function AnswerSuggestions({
     candidateQuestions,
-    detectedQuestions,
     onPickQuestion,
     onDismissCandidate,
-    onSelectOption,
     onClearAll,
 }: AnswerSuggestionsProps) {
     const scrollRef = useRef<HTMLDivElement>(null);

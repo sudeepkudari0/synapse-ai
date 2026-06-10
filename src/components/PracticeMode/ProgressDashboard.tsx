@@ -158,7 +158,7 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ onClose })
                                 Score History
                             </h3>
                             <div className="bg-zinc-800/50 rounded-lg border border-zinc-700/50 p-3 space-y-1.5">
-                                {filteredData.slice(-10).map((session, i) => {
+                                {filteredData.slice(-10).map((session) => {
                                     const barWidth = Math.round((session.averageScore / 10) * 100);
                                     const date = new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                                     return (
