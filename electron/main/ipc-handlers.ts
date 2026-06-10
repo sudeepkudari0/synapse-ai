@@ -6,6 +6,16 @@ import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
 
+/**
+ * Registers all IPC handlers in the Electron main process.
+ * This establishes communication channels between the renderer process (frontend)
+ * and the system/native features of the application, including:
+ * - STT Engine (Whisper.cpp / Moonshine download and transcription)
+ * - Screen capture and LLM analysis (Ollama / OpenAI APIs)
+ * - App settings persistence and profile data data management
+ * - Career Hub JobSpy scraper running and automatic resume tailoring
+ * - Window controls and navigation routing
+ */
 export function registerIPCHandlers(): void {
 
 
@@ -629,6 +639,15 @@ Be concise but thorough. Use bullet points and code blocks where appropriate.`;
             return { success: true, data };
         } catch (error) {
             console.error('IPC: JobSpy run failed:', error);
+            return { success: false, error: String(error) };
+        }
+    });
+
+    ipcMain.handle('career:check-jobspy', async () => {
+        try {
+            const { checkJobspySetup } = await import('./jobspy/runner');
+            return { success: true, ...checkJobspySetup() };
+        } catch (error) {
             return { success: false, error: String(error) };
         }
     });

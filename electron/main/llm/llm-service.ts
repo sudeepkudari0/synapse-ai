@@ -25,6 +25,10 @@ interface LLMConfig {
     ollamaModel: string;
     ollamaBaseUrl: string;
     useOllamaOnly: boolean;
+    llmProvider: 'ollama' | 'openai';
+    openaiApiKey: string;
+    openaiModel: string;
+    resumeContext: string;
 }
 
 /**
@@ -42,12 +46,14 @@ export class LLMService {
     private geminiClient: GoogleGenAI;
     private groqClient: OpenAI;
     private ollamaClient: OpenAI;
+    private openaiClient: OpenAI;
 
     // Default models
     private static readonly DEFAULT_MODELS = {
         gemini: 'gemini-2.0-flash', // Supports vision
         groq: 'llama-3.3-70b-versatile', // Highly accurate model
         ollama: 'qwen3-vl:2b', // Default local model
+        openai: 'gpt-4o-mini',
     };
 
     constructor(config?: Partial<LLMConfig>) {
@@ -73,6 +79,10 @@ export class LLMService {
             ollamaModel: settings.ollamaModel || process.env.OLLAMA_MODEL || LLMService.DEFAULT_MODELS.ollama,
             ollamaBaseUrl: settings.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1',
             useOllamaOnly: settings.useOllamaOnly ?? false,
+            llmProvider: settings.llmProvider || 'ollama',
+            openaiApiKey: cleanKey(settings.openaiApiKey || process.env.OPENAI_API_KEY) || '',
+            openaiModel: settings.openaiModel || 'gpt-4o-mini',
+            resumeContext: settings.resumeContext || '',
         };
 
         // Initialize Gemini
@@ -94,6 +104,15 @@ export class LLMService {
             this.groqClient = null as any;
         }
 
+        // Initialize OpenAI (Cloud)
+        if (this.config.openaiApiKey) {
+            this.openaiClient = new OpenAI({
+                apiKey: this.config.openaiApiKey,
+            });
+        } else {
+            this.openaiClient = null as any;
+        }
+
         // Initialize Ollama (via OpenAI SDK pointing to local instance)
         this.ollamaClient = new OpenAI({
             apiKey: 'ollama', // Dummy key required by SDK
@@ -105,13 +124,19 @@ export class LLMService {
      * Generate text with automatic fallback from Gemini to Groq
      */
     async generate(options: LLMOptions): Promise<{ text: string; stream?: AsyncIterable<string> }> {
-        if (options.stream) {
+        let systemPrompt = options.systemPrompt;
+        if (this.config.resumeContext && this.config.resumeContext.trim()) {
+            systemPrompt = `The candidate's background: ${this.config.resumeContext.trim()}\nGenerate answers that reference their specific experience where relevant.\n\n${systemPrompt}`;
+        }
+        const updatedOptions = { ...options, systemPrompt };
+
+        if (updatedOptions.stream) {
             return {
                 text: '',
-                stream: this.streamGenerateWithFallback(options),
+                stream: this.streamGenerateWithFallback(updatedOptions),
             };
         } else {
-            const text = await this.generateTextWithFallback(options);
+            const text = await this.generateTextWithFallback(updatedOptions);
             return { text };
         }
     }
@@ -120,6 +145,11 @@ export class LLMService {
      * Non-streaming fallback mechanism
      */
     private async generateTextWithFallback(options: LLMOptions): Promise<string> {
+        if (this.config.llmProvider === 'openai') {
+            console.log(`[LLMService] Using OpenAI provider (${this.config.openaiModel})...`);
+            return await this.generateOpenAI(options);
+        }
+
         if (this.config.useOllamaOnly) {
             console.log(`[LLMService] useOllamaOnly is enabled. Trying Ollama (${this.config.ollamaModel})...`);
             return await this.generateOllama(options);
@@ -159,6 +189,12 @@ export class LLMService {
      * Streaming fallback mechanism
      */
     private async *streamGenerateWithFallback(options: LLMOptions): AsyncIterable<string> {
+        if (this.config.llmProvider === 'openai') {
+            console.log(`[LLMService] Using OpenAI provider Stream (${this.config.openaiModel})...`);
+            yield* this.streamOpenAI(options);
+            return;
+        }
+
         if (this.config.useOllamaOnly) {
             console.log(`[LLMService] useOllamaOnly is enabled. Trying Ollama Stream (${this.config.ollamaModel})...`);
             yield* this.streamOllama(options);
@@ -566,6 +602,84 @@ export class LLMService {
      */
     isConfigured(): boolean {
         return !!this.config.geminiApiKey && !!this.config.groqApiKey;
+    }
+
+    // ─── OpenAI Implementation ───
+
+    private async generateOpenAI(options: LLMOptions): Promise<string> {
+        if (!this.openaiClient) {
+            throw new Error("OpenAI API key is not configured. Please add it in Settings.");
+        }
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            { role: 'system', content: options.systemPrompt },
+        ];
+
+        if (options.imageData) {
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: options.prompt },
+                    {
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:image/png;base64,${options.imageData}`,
+                        },
+                    },
+                ],
+            });
+        } else {
+            messages.push({ role: 'user', content: options.prompt });
+        }
+
+        const response = await this.openaiClient.chat.completions.create({
+            model: this.config.openaiModel || 'gpt-4o-mini',
+            messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.maxTokens,
+        });
+
+        return response.choices[0]?.message?.content || '';
+    }
+
+    private async *streamOpenAI(options: LLMOptions): AsyncIterable<string> {
+        if (!this.openaiClient) {
+            throw new Error("OpenAI API key is not configured. Please add it in Settings.");
+        }
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            { role: 'system', content: options.systemPrompt },
+        ];
+
+        if (options.imageData) {
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: options.prompt },
+                    {
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:image/png;base64,${options.imageData}`,
+                        },
+                    },
+                ],
+            });
+        } else {
+            messages.push({ role: 'user', content: options.prompt });
+        }
+
+        const stream = await this.openaiClient.chat.completions.create({
+            model: this.config.openaiModel || 'gpt-4o-mini',
+            messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.maxTokens,
+            stream: true,
+        });
+
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                yield content;
+            }
+        }
     }
 }
 

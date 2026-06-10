@@ -6,6 +6,7 @@ export interface PracticeConfig {
     role: string;
     company?: string;
     questionCount: number; // 5-10
+    jobDescription?: string;
 }
 
 export interface PracticeQuestion {

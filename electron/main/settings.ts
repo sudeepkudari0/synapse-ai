@@ -28,9 +28,13 @@ export interface AppSettings {
     useGroqProxy: boolean;
     groqProxyBigModel: string;
     groqProxySmallModel: string;
+    llmProvider: 'ollama' | 'openai';
+    openaiApiKey: string;
+    openaiModel: string;
+    resumeContext: string;
 }
 
-const CURRENT_VERSION = 13;
+const CURRENT_VERSION = 14;
 
 const DEFAULT_SETTINGS: AppSettings = {
     version: CURRENT_VERSION,
@@ -58,6 +62,10 @@ const DEFAULT_SETTINGS: AppSettings = {
     useGroqProxy: false,
     groqProxyBigModel: 'llama-3.3-70b-versatile',
     groqProxySmallModel: 'llama-3.1-8b-instant',
+    llmProvider: 'ollama',
+    openaiApiKey: '',
+    openaiModel: 'gpt-4o-mini',
+    resumeContext: '',
 };
 
 // Migration map: version number -> transform function
@@ -166,6 +174,17 @@ const MIGRATIONS: Record<number, (settings: any) => any> = {
                 : bigModel || 'llama-3.3-70b-versatile',
             useGroqProxy: settings.groqApiKey ? true : settings.useGroqProxy,
             version: 13,
+        };
+    },
+    13: (settings: any) => {
+        // v13 -> v14: Add OpenAI provider and resume context fields
+        return {
+            ...settings,
+            llmProvider: settings.llmProvider || 'ollama',
+            openaiApiKey: settings.openaiApiKey || '',
+            openaiModel: settings.openaiModel || 'gpt-4o-mini',
+            resumeContext: settings.resumeContext || '',
+            version: 14,
         };
     },
 };

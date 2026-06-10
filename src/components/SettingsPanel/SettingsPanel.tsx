@@ -40,7 +40,11 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
         showDeliveryMetrics: true,
         useGroqProxy: false,
         groqProxyBigModel: 'moonshotai/kimi-k2-instruct-0905',
-        groqProxySmallModel: 'llama-3.1-8b-instant'
+        groqProxySmallModel: 'llama-3.1-8b-instant',
+        llmProvider: 'ollama' as 'ollama' | 'openai',
+        openaiApiKey: '',
+        openaiModel: 'gpt-4o-mini',
+        resumeContext: ''
     });
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [isTesting, setIsTesting] = useState(false);
@@ -191,7 +195,11 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     showDeliveryMetrics: s.showDeliveryMetrics !== false,
                     useGroqProxy: s.useGroqProxy || false,
                     groqProxyBigModel: s.groqProxyBigModel || 'moonshotai/kimi-k2-instruct-0905',
-                    groqProxySmallModel: s.groqProxySmallModel || 'llama-3.1-8b-instant'
+                    groqProxySmallModel: s.groqProxySmallModel || 'llama-3.1-8b-instant',
+                    llmProvider: s.llmProvider || 'ollama',
+                    openaiApiKey: s.openaiApiKey || '',
+                    openaiModel: s.openaiModel || 'gpt-4o-mini',
+                    resumeContext: s.resumeContext || ''
                 });
 
                 // Fetch cloud models silently with loaded keys
@@ -372,7 +380,23 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                     {activeTab === 'profile' ? (
                         <div className="space-y-6">
                             <ProfileSection />
-                            
+                             
+                             <div className="border-t border-zinc-800 pt-4 mt-2">
+                                 <h3 className="text-sm font-semibold text-white mb-1">Your Background</h3>
+                                 <label className="block text-[10px] text-zinc-400 mb-2">
+                                     Paste your resume or background summary here for personalized practice session answers
+                                 </label>
+                                 <textarea
+                                     value={settings.resumeContext}
+                                     onChange={(e) => setSettings({ ...settings, resumeContext: e.target.value.slice(0, 3000) })}
+                                     placeholder="Describe your career history, key achievements, or paste your plain-text resume here..."
+                                     className="w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                 />
+                                 <div className="text-[10px] text-zinc-500 text-right mt-1">
+                                     {settings.resumeContext ? settings.resumeContext.length : 0} / 3000 characters
+                                 </div>
+                             </div>
+
                             <div className="border-t border-zinc-800 pt-4 mt-2">
                                 <h3 className="text-sm font-semibold text-white mb-3">Interview Context</h3>
                                 <div className="space-y-4">
@@ -659,6 +683,38 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                         </div>
                     ) : (
                         <div className="space-y-4">
+                            {/* Provider Toggle */}
+                            <div className="mb-4">
+                                <label className="block text-xs font-medium text-zinc-400 mb-2">
+                                    Primary Answer Provider
+                                </label>
+                                <div className="flex bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings({ ...settings, llmProvider: 'ollama' })}
+                                        className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all duration-150 ${
+                                            settings.llmProvider === 'ollama'
+                                                ? 'bg-indigo-600 text-white shadow-sm'
+                                                : 'text-zinc-400 hover:text-zinc-200'
+                                        }`}
+                                    >
+                                        Local (Ollama / Fallbacks)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings({ ...settings, llmProvider: 'openai' })}
+                                        className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all duration-150 ${
+                                            settings.llmProvider === 'openai'
+                                                ? 'bg-indigo-600 text-white shadow-sm'
+                                                : 'text-zinc-400 hover:text-zinc-200'
+                                        }`}
+                                    >
+                                        Cloud (OpenAI)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Deepgram API Key (STT) */}
                             <div>
                                 <label className="block text-sm font-medium text-zinc-300 mb-1">
                                     Deepgram API Key (Speech-to-Text)
@@ -671,185 +727,224 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-zinc-300 mb-1 flex items-center justify-between">
-                                    <span>Gemini API Key</span>
-                                    {geminiVerified && (
-                                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
-                                            ✓ Verified
-                                        </span>
-                                    )}
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="password"
-                                        value={settings.geminiApiKey}
-                                        onChange={(e) => handleApiKeyChange('gemini', e.target.value)}
-                                        placeholder="AIza..."
-                                        className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                                    />
-                                    {settings.geminiApiKey && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleVerifyKey('gemini')}
-                                            disabled={verifyingGemini}
-                                            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center justify-center min-w-[80px] ${
-                                                geminiVerified
-                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed'
-                                            }`}
-                                        >
-                                            {verifyingGemini ? 'Testing...' : geminiVerified ? 'Verified' : 'Verify'}
-                                        </button>
-                                    )}
-                                </div>
-                                {geminiVerificationError && (
-                                    <p className="mt-1.5 text-[10px] text-red-400 bg-red-500/5 px-2.5 py-1 rounded border border-red-500/10 animate-slide-down">
-                                        Verification failed: {geminiVerificationError}
-                                    </p>
-                                )}
-                                {geminiVerified && geminiModels.length > 0 && (
-                                    <div className="mt-2.5 pl-3 border-l-2 border-emerald-500/40 animate-slide-down space-y-1">
-                                        <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                                            Select Gemini Model
-                                        </label>
-                                        <select
-                                            value={settings.geminiModel}
-                                            onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
-                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-zinc-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                                        >
-                                            {geminiModels.map(model => (
-                                                <option key={model} value={model}>{model}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-zinc-300 mb-1 flex items-center justify-between">
-                                    <span>Groq API Key (Fallback)</span>
-                                    {groqVerified && (
-                                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
-                                            ✓ Verified
-                                        </span>
-                                    )}
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="password"
-                                        value={settings.groqApiKey}
-                                        onChange={(e) => handleApiKeyChange('groq', e.target.value)}
-                                        placeholder="gsk_..."
-                                        className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                                    />
-                                    {settings.groqApiKey && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleVerifyKey('groq')}
-                                            disabled={verifyingGroq}
-                                            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center justify-center min-w-[80px] ${
-                                                groqVerified
-                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed'
-                                            }`}
-                                        >
-                                            {verifyingGroq ? 'Testing...' : groqVerified ? 'Verified' : 'Verify'}
-                                        </button>
-                                    )}
-                                </div>
-                                {groqVerificationError && (
-                                    <p className="mt-1.5 text-[10px] text-red-400 bg-red-500/5 px-2.5 py-1 rounded border border-red-500/10 animate-slide-down">
-                                        Verification failed: {groqVerificationError}
-                                    </p>
-                                )}
-                                {groqVerified && groqModels.length > 0 && (
-                                    <div className="mt-2.5 pl-3 border-l-2 border-emerald-500/40 animate-slide-down space-y-1">
-                                        <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                                            Select Groq Model
-                                        </label>
-                                        <select
-                                            value={settings.groqModel}
-                                            onChange={(e) => setSettings({ ...settings, groqModel: e.target.value })}
-                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-zinc-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                                        >
-                                            {groqModels.map(model => (
-                                                <option key={model} value={model}>{model}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
 
-                            <div className="pt-2 border-t border-zinc-800 mt-4">
-                                <div className="flex items-center justify-between mb-3">
-                                    <h3 className="text-sm font-semibold text-white">Local AI (Ollama)</h3>
-                                    <div className="flex items-center">
-                                        <span className="text-xs text-zinc-400 mr-2">Use Ollama Only</span>
-                                        <button
-                                            onClick={() => setSettings({ ...settings, useOllamaOnly: !settings.useOllamaOnly })}
-                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                                                settings.useOllamaOnly ? 'bg-indigo-600' : 'bg-zinc-700'
-                                            }`}
-                                        >
-                                            <span
-                                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                                                    settings.useOllamaOnly ? 'translate-x-5' : 'translate-x-1'
-                                                }`}
-                                            />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
+                            {settings.llmProvider === 'openai' ? (
+                                <div className="space-y-4 pt-2 border-t border-zinc-800">
+                                    <h3 className="text-sm font-semibold text-white">OpenAI Settings</h3>
                                     <div>
-                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                            Ollama Base URL
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                            OpenAI API Key
                                         </label>
                                         <input
-                                            type="text"
-                                            value={settings.ollamaBaseUrl}
-                                            onChange={(e) => setSettings({ ...settings, ollamaBaseUrl: e.target.value })}
-                                            placeholder="http://localhost:11434/v1"
-                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            type="password"
+                                            value={settings.openaiApiKey}
+                                            onChange={(e) => setSettings({ ...settings, openaiApiKey: e.target.value })}
+                                            placeholder="sk-proj-..."
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         />
+                                        <p className="mt-1.5 text-[10px] text-amber-500 bg-amber-500/5 px-2.5 py-1 rounded border border-amber-500/10">
+                                            ⚠️ Your API key is stored locally on your machine only.
+                                        </p>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                            Model Name
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1">
+                                            OpenAI Model
                                         </label>
                                         <select
-                                            value={settings.ollamaModel}
-                                            onChange={(e) => setSettings({ ...settings, ollamaModel: e.target.value })}
-                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            value={settings.openaiModel}
+                                            onChange={(e) => setSettings({ ...settings, openaiModel: e.target.value })}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         >
-                                            <option value="qwen2.5-coder:7b">qwen2.5-coder:7b (Coding & Text - Recommended)</option>
-                                            <option value="llama3.1:8b">llama3.1:8b (Strong Tool Calling - Recommended)</option>
-                                            <option value="qwen3-vl:2b">qwen3-vl:2b (Vision - Recommended)</option>
-                                            <option value="qwen3-vl:2b-instruct">qwen3-vl:2b-instruct (Vision - Direct)</option>
-                                            <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b (Coding & Text)</option>
-                                            <option value="deepseek-r1:1.5b">deepseek-r1:1.5b (Reasoning)</option>
-                                            <option value="llama3.2-vision">llama3.2-vision (Vision)</option>
+                                            <option value="gpt-4o-mini">gpt-4o-mini (Fast & Cheap - Recommended)</option>
+                                            <option value="gpt-4o">gpt-4o (High Accuracy)</option>
+                                            <option value="o3-mini">o3-mini (Reasoning Model)</option>
                                         </select>
                                     </div>
-                                    <div className="flex flex-col gap-2">
-                                        <button
-                                            onClick={handleTestOllama}
-                                            disabled={isTesting}
-                                            className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg transition-colors border border-zinc-700 flex items-center justify-center gap-2"
-                                        >
-                                            {isTesting ? 'Testing...' : 'Test Ollama Connection'}
-                                        </button>
-                                        {testResult && (
-                                            <div className={`text-[10px] px-2 py-1 rounded ${
-                                                testResult.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                                            }`}>
-                                                {testResult.message}
+                                </div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1 flex items-center justify-between">
+                                            <span>Gemini API Key</span>
+                                            {geminiVerified && (
+                                                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
+                                                    ✓ Verified
+                                                </span>
+                                            )}
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="password"
+                                                value={settings.geminiApiKey}
+                                                onChange={(e) => handleApiKeyChange('gemini', e.target.value)}
+                                                placeholder="AIza..."
+                                                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                            />
+                                            {settings.geminiApiKey && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleVerifyKey('gemini')}
+                                                    disabled={verifyingGemini}
+                                                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center justify-center min-w-[80px] ${
+                                                        geminiVerified
+                                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                                                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    {verifyingGemini ? 'Testing...' : geminiVerified ? 'Verified' : 'Verify'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {geminiVerificationError && (
+                                            <p className="mt-1.5 text-[10px] text-red-400 bg-red-500/5 px-2.5 py-1 rounded border border-red-500/10 animate-slide-down">
+                                                Verification failed: {geminiVerificationError}
+                                            </p>
+                                        )}
+                                        {geminiVerified && geminiModels.length > 0 && (
+                                            <div className="mt-2.5 pl-3 border-l-2 border-emerald-500/40 animate-slide-down space-y-1">
+                                                <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                                                    Select Gemini Model
+                                                </label>
+                                                <select
+                                                    value={settings.geminiModel}
+                                                    onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
+                                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-zinc-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                                >
+                                                    {geminiModels.map(model => (
+                                                        <option key={model} value={model}>{model}</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         )}
                                     </div>
-                                </div>
-                            </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-300 mb-1 flex items-center justify-between">
+                                            <span>Groq API Key (Fallback)</span>
+                                            {groqVerified && (
+                                                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
+                                                    ✓ Verified
+                                                </span>
+                                            )}
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="password"
+                                                value={settings.groqApiKey}
+                                                onChange={(e) => handleApiKeyChange('groq', e.target.value)}
+                                                placeholder="gsk_..."
+                                                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                            />
+                                            {settings.groqApiKey && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleVerifyKey('groq')}
+                                                    disabled={verifyingGroq}
+                                                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center justify-center min-w-[80px] ${
+                                                        groqVerified
+                                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                                                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    {verifyingGroq ? 'Testing...' : groqVerified ? 'Verified' : 'Verify'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {groqVerificationError && (
+                                            <p className="mt-1.5 text-[10px] text-red-400 bg-red-500/5 px-2.5 py-1 rounded border border-red-500/10 animate-slide-down">
+                                                Verification failed: {groqVerificationError}
+                                            </p>
+                                        )}
+                                        {groqVerified && groqModels.length > 0 && (
+                                            <div className="mt-2.5 pl-3 border-l-2 border-emerald-500/40 animate-slide-down space-y-1">
+                                                <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                                                    Select Groq Model
+                                                </label>
+                                                <select
+                                                    value={settings.groqModel}
+                                                    onChange={(e) => setSettings({ ...settings, groqModel: e.target.value })}
+                                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-zinc-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                                                >
+                                                    {groqModels.map(model => (
+                                                        <option key={model} value={model}>{model}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
 
+                                    <div className="pt-2 border-t border-zinc-800 mt-4">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="text-sm font-semibold text-white">Local AI (Ollama)</h3>
+                                            <div className="flex items-center">
+                                                <span className="text-xs text-zinc-400 mr-2">Use Ollama Only</span>
+                                                <button
+                                                    onClick={() => setSettings({ ...settings, useOllamaOnly: !settings.useOllamaOnly })}
+                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                        settings.useOllamaOnly ? 'bg-indigo-600' : 'bg-zinc-700'
+                                                    }`}
+                                                >
+                                                    <span
+                                                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                                            settings.useOllamaOnly ? 'translate-x-5' : 'translate-x-1'
+                                                        }`}
+                                                    />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                    Ollama Base URL
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.ollamaBaseUrl}
+                                                    onChange={(e) => setSettings({ ...settings, ollamaBaseUrl: e.target.value })}
+                                                    placeholder="http://localhost:11434/v1"
+                                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                    Model Name
+                                                </label>
+                                                <select
+                                                    value={settings.ollamaModel}
+                                                    onChange={(e) => setSettings({ ...settings, ollamaModel: e.target.value })}
+                                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                >
+                                                    <option value="qwen2.5-coder:7b">qwen2.5-coder:7b (Coding & Text - Recommended)</option>
+                                                    <option value="llama3.1:8b">llama3.1:8b (Strong Tool Calling - Recommended)</option>
+                                                    <option value="qwen3-vl:2b">qwen3-vl:2b (Vision - Recommended)</option>
+                                                    <option value="qwen3-vl:2b-instruct">qwen3-vl:2b-instruct (Vision - Direct)</option>
+                                                    <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b (Coding & Text)</option>
+                                                    <option value="deepseek-r1:1.5b">deepseek-r1:1.5b (Reasoning)</option>
+                                                    <option value="llama3.2-vision">llama3.2-vision (Vision)</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <button
+                                                    onClick={handleTestOllama}
+                                                    disabled={isTesting}
+                                                    className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg transition-colors border border-zinc-700 flex items-center justify-center gap-2"
+                                                >
+                                                    {isTesting ? 'Testing...' : 'Test Ollama Connection'}
+                                                </button>
+                                                {testResult && (
+                                                    <div className={`text-[10px] px-2 py-1 rounded ${
+                                                        testResult.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                                    }`}>
+                                                        {testResult.message}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Groq Proxy */}
                             <div className="pt-2 border-t border-zinc-800 mt-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <h3 className="text-sm font-semibold text-white">Groq Proxy (for Auto-Apply)</h3>
@@ -904,9 +999,11 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                             </div>
 
                             <p className="mt-4 text-xs text-zinc-500">
-                                {settings.useOllamaOnly 
-                                    ? "Currently strictly using local Ollama. Cloud fallbacks are disabled." 
-                                    : "Gemini is the cloud primary. Groq is the cloud fallback. Ollama is the local fallback."}
+                                {settings.llmProvider === 'openai' 
+                                    ? `Currently using Cloud OpenAI (${settings.openaiModel}).`
+                                    : settings.useOllamaOnly 
+                                        ? "Currently strictly using local Ollama. Cloud fallbacks are disabled." 
+                                        : "Gemini is the cloud primary. Groq is the cloud fallback. Ollama is the local fallback."}
                             </p>
                         </div>
                     )}

@@ -44,7 +44,7 @@ export const PracticeSession: React.FC = () => {
                     role: practiceConfig.role,
                     company: practiceConfig.company,
                     resume: profile?.resume,
-                    jobDescription: profile?.jobDescription,
+                    jobDescription: practiceConfig.jobDescription || profile?.jobDescription,
                     previousQuestions,
                     difficultyLevel: Math.min(5, 1 + Math.floor(currentQuestionIndex / 2)),
                 });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { usePracticeStore } from '../../state/practice-store';
+import { useSessionStore } from '../../state/session-store';
 import { InterviewType } from '../../lib/prompts/types';
 import { BarChart3 } from 'lucide-react';
 
@@ -9,12 +10,14 @@ interface PracticeSetupProps {
 
 export const PracticeSetup: React.FC<PracticeSetupProps> = ({ onShowProgress }) => {
     const { startPractice } = usePracticeStore();
+    const { resetSession } = useSessionStore();
     const [interviewType, setInterviewType] = useState<InterviewType>('behavioral');
     const [role, setRole] = useState('Software Engineer');
     const [company, setCompany] = useState('');
     const [questionCount, setQuestionCount] = useState(5);
 
     const handleStart = () => {
+        resetSession();
         startPractice({
             interviewType,
             role,

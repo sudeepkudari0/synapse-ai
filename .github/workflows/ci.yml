@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Use Node.js 18
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run TypeScript type check (Electron)
+      run: npx tsc -p tsconfig.electron.json --noEmit
+
+    - name: Run TypeScript type check (Renderer)
+      run: npx tsc -p tsconfig.app.json --noEmit
+
+    - name: Build application
+      run: npm run build:electron && npm run build
+
+    - name: Install Playwright dependencies
+      run: npx playwright install-deps
+
+    - name: Run Playwright E2E tests
+      run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npm run test:e2e

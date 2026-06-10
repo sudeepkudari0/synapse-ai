@@ -54,3 +54,10 @@ native/moonshine/build/
 native/moonshine/dist/
 native/moonshine/*.spec
 native/moonshine/__pycache__/
+
+# JobSpy Python sidecar environment & cache
+native/jobspy/venv/
+native/jobspy/__pycache__/
+native/jobspy/results.json
+native/jobspy/*.egg-info/
+native/jobspy/*.spec

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useJobStore } from '../../career/state/career-store';
+import { useNavigationStore } from '../../state/navigation-store';
 import type { Job } from '../../career/core/types';
 
 const JOB_BOARDS = [
@@ -189,6 +190,29 @@ export function JobSearch() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [setupStatus, setSetupStatus] = useState<string | null>(null);
+  const [pythonStatus, setPythonStatus] = useState<{ checked: boolean; pythonAvailable: boolean; venvReady: boolean }>({
+    checked: false,
+    pythonAvailable: false,
+    venvReady: false
+  });
+
+  useEffect(() => {
+    if ((window as any).electronAPI?.careerHub?.checkJobspy) {
+      (window as any).electronAPI.careerHub.checkJobspy().then((res: any) => {
+        if (res.success) {
+          setPythonStatus({
+            checked: true,
+            pythonAvailable: res.pythonAvailable,
+            venvReady: res.venvReady
+          });
+        } else {
+          setPythonStatus(prev => ({ ...prev, checked: true }));
+        }
+      }).catch(() => {
+        setPythonStatus(prev => ({ ...prev, checked: true }));
+      });
+    }
+  }, []);
 
   const toggleBoard = (id: string) => {
     setSelectedBoards((prev) =>
@@ -197,19 +221,34 @@ export function JobSearch() {
   };
 
   const handleSearch = async () => {
-    if (!query.trim() || !location.trim()) return;
-    
     setLoading(true);
     setError(null);
-    setResults([]);
     setSetupStatus(null);
-
-    let unsubscribeStatus: (() => void) | undefined;
-    if ((window as any).electronAPI?.careerHub?.onSetupStatus) {
-      unsubscribeStatus = (window as any).electronAPI.careerHub.onSetupStatus((status: string) => {
-        setSetupStatus(status);
-      });
+    
+    // Check python status again before search starts to ensure it hasn't changed
+    if ((window as any).electronAPI?.careerHub?.checkJobspy) {
+      try {
+        const res = await (window as any).electronAPI.careerHub.checkJobspy();
+        if (res.success) {
+          setPythonStatus({
+            checked: true,
+            pythonAvailable: res.pythonAvailable,
+            venvReady: res.venvReady
+          });
+        }
+      } catch (e) {}
     }
+
+    // Set up status handler
+    const removeListener = (window as any).electronAPI?.careerHub?.onSetupStatus?.((status: string) => {
+      if (status === 'creating_venv') {
+        setSetupStatus('Creating Python virtual environment...');
+      } else if (status === 'installing_requirements') {
+        setSetupStatus('Installing scraper dependencies (jobspy, pandas)...');
+      } else if (status === 'running') {
+        setSetupStatus('Executing JobSpy scraper...');
+      }
+    });
 
     try {
       const response = await (window as any).electronAPI.careerHub.runJobspy({
@@ -221,13 +260,9 @@ export function JobSearch() {
       });
 
       if (response.success) {
-        // Filter out jobs that are already saved
-        const fetchedJobs = response.data || [];
-        const newUniqueJobs = fetchedJobs.filter((job: any) => {
-          const applyUrl = job.job_url || job.job_url_direct;
-          return !savedJobs.some((saved) => saved.url === applyUrl);
-        });
-        setResults(newUniqueJobs);
+        setResults(response.data || []);
+        // update setup status so it doesn't show in UI anymore, and update venv status
+        setPythonStatus(prev => ({ ...prev, venvReady: true }));
       } else {
         setError(response.error || 'Unknown error occurred during search.');
       }
@@ -236,19 +271,18 @@ export function JobSearch() {
     } finally {
       setLoading(false);
       setSetupStatus(null);
-      if (unsubscribeStatus) {
-        unsubscribeStatus();
-      }
+      if (removeListener) removeListener();
     }
   };
 
   const handleSaveJob = (job: any) => {
+    const applyUrl = job.job_url || job.job_url_direct || '';
     const newJob: Job = {
       id: Date.now().toString() + Math.random().toString(36).slice(2),
-      url: job.job_url || job.job_url_direct || '',
-      title: job.title || 'Unknown Title',
+      url: applyUrl,
+      title: job.title || 'Untitled Role',
       company: job.company || 'Unknown Company',
-      location: job.location || '',
+      location: job.location || 'Remote',
       description: job.description || '',
       isRemote: job.is_remote || false,
       source: job.site || 'JobSpy',
@@ -271,6 +305,52 @@ export function JobSearch() {
 
   return (
     <div className="js-dashboard" style={{ paddingBottom: '60px' }}>
+      {pythonStatus.checked && !pythonStatus.pythonAvailable && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '20px',
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-start',
+          color: '#f87171',
+          fontSize: '14px',
+          lineHeight: '1.5'
+        }}>
+          <span style={{ fontSize: '20px' }}>⚠️</span>
+          <div>
+            <h4 style={{ margin: '0 0 6px 0', fontWeight: 'bold' }}>Python 3 Not Found</h4>
+            <p style={{ margin: 0, color: '#fca5a5' }}>
+              Synapse AI uses <strong>python-jobspy</strong> to scrape job boards offline. 
+              To enable this feature, please install Python 3.9+ on your system and restart the app.
+              Once Python is installed, Synapse AI will automatically configure the required packages on your first search.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {pythonStatus.checked && pythonStatus.pythonAvailable && !pythonStatus.venvReady && (
+        <div style={{
+          background: 'rgba(99, 102, 241, 0.08)',
+          border: '1px solid rgba(99, 102, 241, 0.2)',
+          borderRadius: '12px',
+          padding: '12px 16px',
+          marginBottom: '20px',
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'center',
+          color: '#a5b4fc',
+          fontSize: '13px'
+        }}>
+          <span style={{ fontSize: '18px' }}>ℹ️</span>
+          <div>
+            Synapse AI will automatically initialize the local Python scraping environment (via <code>pip install python-jobspy pandas</code>) on your first search.
+          </div>
+        </div>
+      )}
+
       {/* Search Configuration */}
       <div className="js-glass-panel">
         <div className="js-header">
@@ -432,6 +512,32 @@ export function JobSearch() {
                         + Save to Manager
                       </button>
                     )}
+
+                    <button
+                      className="js-btn-prep"
+                      onClick={() => {
+                        const prepJob = {
+                          role: job.title || '',
+                          company: job.company || '',
+                          jobDescription: job.description || ''
+                        };
+                        localStorage.setItem('prepJob', JSON.stringify(prepJob));
+                        useNavigationStore.getState().setActiveModule('interview');
+                      }}
+                      style={{
+                        background: 'rgba(99, 102, 241, 0.15)',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        color: '#a5b4fc',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        marginLeft: '6px'
+                      }}
+                    >
+                      🎙️ Prep
+                    </button>
                   </div>
                 </div>
               );

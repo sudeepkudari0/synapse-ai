@@ -194,3 +194,15 @@ export function runJobspySearch(options: JobspyOptions, onStatusUpdate?: (status
     );
   });
 }
+
+export function checkJobspySetup(): { pythonAvailable: boolean; venvReady: boolean } {
+  const nativeDir = getJobspyDir();
+  const venvDir = getVenvDir(nativeDir);
+  const venvBin = getVenvPython(venvDir);
+  const sentinelPath = path.join(venvDir, "setup_complete.txt");
+
+  const pythonAvailable = findSystemPython() !== null;
+  const venvReady = fs.existsSync(venvBin) && fs.existsSync(sentinelPath);
+
+  return { pythonAvailable, venvReady };
+}

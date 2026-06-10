@@ -5,7 +5,7 @@
     "name": "Sudeep Kudari",
     "email": "sudeepkudari0@gmail.com"
   },
-  "description": "AI-powered interview assistant with real-time screen analysis and intelligent suggestions",
+  "description": "AI-powered interview practice platform with offline speech recognition, real-time delivery coaching, and LLM-generated feedback",
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"bun run build:all\" \"wait-on http://localhost:5173 && electron .\"",
@@ -40,7 +40,10 @@
     "electron",
     "react",
     "vite",
-    "overlay"
+    "interview-practice",
+    "speech-recognition",
+    "delivery-coaching",
+    "interview-prep"
   ],
   "license": "ISC",
   "build": {
@@ -153,6 +156,7 @@
     "dotenv": "^17.2.3",
     "fill-range": "^7.1.1",
     "js-yaml": "^4.2.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.561.0",
     "onnxruntime-web": "^1.24.3",
     "openai": "^6.14.0",

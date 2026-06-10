@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AppRouter } from './AppRouter';
+import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
 import './index.css';
 import './career-hub.css';
 import { useSessionStore, useAnswerStore, useUIStore } from './state';
@@ -16,6 +17,8 @@ import { filterHallucinations } from './lib/hallucination-filter';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AppRouter />
+    <ErrorBoundary>
+      <AppRouter />
+    </ErrorBoundary>
   </React.StrictMode>
 );

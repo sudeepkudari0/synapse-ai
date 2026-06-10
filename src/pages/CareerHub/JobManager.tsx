@@ -17,7 +17,8 @@ import {
   MapPin,
   Building2,
   Calendar,
-  Briefcase
+  Briefcase,
+  Play
 } from "lucide-react";
 
 const STATUS_OPTIONS: {
@@ -240,6 +241,21 @@ export function JobManager() {
                 <ExternalLink className="w-4 h-4" />
               </button>
             )}
+            <button
+              onClick={() => {
+                const prepJob = {
+                  role: job.title || '',
+                  company: job.company || '',
+                  jobDescription: job.description || ''
+                };
+                localStorage.setItem('prepJob', JSON.stringify(prepJob));
+                useNavigationStore.getState().setActiveModule('interview');
+              }}
+              className="p-1.5 hover:bg-emerald-500/10 text-emerald-400 hover:text-emerald-300 rounded-lg transition-all"
+              title="Prep for this Job"
+            >
+              <Play className="w-4 h-4" />
+            </button>
             <button
               onClick={() => {
                 const navStore = useNavigationStore.getState();

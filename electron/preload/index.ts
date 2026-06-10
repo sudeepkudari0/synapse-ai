@@ -197,6 +197,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         saveProfile: async (profile: any) => ipcRenderer.invoke('career:profile:save', profile),
         loadProfile: async () => ipcRenderer.invoke('career:profile:load'),
         runJobspy: async (options: any) => ipcRenderer.invoke('career:run-jobspy', options),
+        checkJobspy: async () => ipcRenderer.invoke('career:check-jobspy'),
         onSetupStatus: (callback: (status: string) => void) => {
             const handler = (_event: any, status: string) => callback(status);
             ipcRenderer.on('career:jobspy-setup-status', handler);

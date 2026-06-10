@@ -130,11 +130,11 @@ export function Dashboard() {
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-slate-400 hover:bg-indigo-500/10 hover:text-indigo-300 group ${
                   isCollapsed ? 'justify-center' : ''
                 }`}
-                title={isCollapsed ? "Interview Assistant" : undefined}
+                title={isCollapsed ? "Interview Practice" : undefined}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-lg">🎙️</span>
-                  {!isCollapsed && <span className="text-sm">Interview Assistant</span>}
+                  {!isCollapsed && <span className="text-sm">Interview Practice</span>}
                 </div>
                 {!isCollapsed && <span className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-400">↗</span>}
               </button>
@@ -204,7 +204,7 @@ function OverviewPanel() {
           </div>
         </div>
 
-        {/* Interview Assistant Card */}
+        {/* Interview Practice Card */}
         <div 
           onClick={() => setActiveModule('interview')}
           className="group cursor-pointer relative overflow-hidden rounded-3xl bg-gradient-to-b from-white/[0.04] to-transparent border border-white/10 p-8 hover:border-purple-500/30 transition-all duration-500 hover:shadow-[0_0_40px_rgba(168,85,247,0.1)]"
@@ -220,12 +220,12 @@ function OverviewPanel() {
               <line x1="8" y1="23" x2="16" y2="23" />
             </svg>
           </div>
-          <h3 className="text-xl font-bold text-slate-200 mb-3">Interview Assistant</h3>
+          <h3 className="text-xl font-bold text-slate-200 mb-3">Interview Practice</h3>
           <p className="text-slate-400 text-sm leading-relaxed mb-6 max-w-[280px]">
-            Launch the real-time AI overlay to get live transcriptions, question detection, and intelligent answer suggestions during interviews.
+            Start a practice session to get real-time delivery coaching, offline speech recognition, and LLM-generated feedback on your answers.
           </p>
           <div className="text-purple-400 text-sm font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
-            Launch Overlay <span className="rotate-[-45deg]">→</span>
+            Start Practice Session <span className="rotate-[-45deg]">→</span>
           </div>
         </div>
       </div>
