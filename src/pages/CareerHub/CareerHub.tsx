@@ -80,6 +80,45 @@ export function CareerHub() {
 
   return (
     <div className="career-hub" style={{ position: "relative" }}>
+      {/* Top Title/Window Bar */}
+      <div
+        className="career-topbar"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          height: "44px",
+          padding: "0 20px",
+          background: "#09090b",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+          WebkitAppRegion: "no-drag",
+        } as any}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flex: 1,
+            height: "100%",
+            WebkitAppRegion: "drag",
+          } as any}
+        >
+          <span style={{ fontSize: "14px" }}>💼</span>
+          <span
+            style={{
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "#e2e8f0",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Career Hub
+          </span>
+        </div>
+        {/* Reserve space for window controls and allow click events to pass through */}
+        <div style={{ width: "110px", height: "100%", WebkitAppRegion: "no-drag" } as any} />
+      </div>
+
       {/* Tab Navigation */}
       <div
         className="career-tabs"
@@ -87,6 +126,9 @@ export function CareerHub() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          padding: "8px 20px",
+          background: "rgba(255, 255, 255, 0.02)",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
         }}
       >
         <div style={{ display: "flex", gap: "8px" }}>

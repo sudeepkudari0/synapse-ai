@@ -823,6 +823,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
                                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         >
                                             <option value="qwen2.5-coder:7b">qwen2.5-coder:7b (Coding & Text - Recommended)</option>
+                                            <option value="llama3.1:8b">llama3.1:8b (Strong Tool Calling - Recommended)</option>
                                             <option value="qwen3-vl:2b">qwen3-vl:2b (Vision - Recommended)</option>
                                             <option value="qwen3-vl:2b-instruct">qwen3-vl:2b-instruct (Vision - Direct)</option>
                                             <option value="qwen2.5-coder:1.5b">qwen2.5-coder:1.5b (Coding & Text)</option>
