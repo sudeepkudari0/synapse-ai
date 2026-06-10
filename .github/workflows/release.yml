@@ -7,7 +7,10 @@ on:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v3
@@ -22,7 +25,14 @@ jobs:
       run: npm install
 
     - name: Build and package Windows application
+      if: matrix.os == 'windows-latest'
       run: npm run dist:win
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and package Linux application
+      if: matrix.os == 'ubuntu-latest'
+      run: npm run dist:linux
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -31,5 +41,6 @@ jobs:
       with:
         files: |
           release/*.exe
+          release/*.AppImage
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
