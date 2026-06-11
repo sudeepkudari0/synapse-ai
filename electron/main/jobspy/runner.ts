@@ -10,6 +10,11 @@ export interface JobspyOptions {
   results?: number;
   hours?: number;
   remote?: boolean;
+  jobType?: string; // fulltime, parttime, internship, contract
+  easyApply?: boolean;
+  distance?: number; // miles
+  country?: string; // e.g. usa, india, uk
+  linkedinFetchDescription?: boolean;
 }
 
 /**
@@ -168,6 +173,11 @@ export function runJobspySearch(options: JobspyOptions, onStatusUpdate?: (status
     if (options.results) command += ` --results ${options.results}`;
     if (options.hours) command += ` --hours ${options.hours}`;
     if (options.remote) command += ` --remote`;
+    if (options.jobType) command += ` --job-type ${options.jobType}`;
+    if (options.easyApply) command += ` --easy-apply`;
+    if (options.distance) command += ` --distance ${options.distance}`;
+    if (options.country) command += ` --country "${options.country}"`;
+    if (options.linkedinFetchDescription) command += ` --linkedin-fetch-description`;
 
     console.log("[JobSpy Runner] Executing:", command);
 

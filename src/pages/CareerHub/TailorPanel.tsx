@@ -31,8 +31,16 @@ import {
 } from "lucide-react";
 
 export function TailorPanel() {
-  const { jobs, updateJob } = useJobStore();
-  const savedJobs = jobs.filter((j) => j.status === "saved");
+  const { jobs, updateJob, bulkTailorJobIds, setBulkTailorJobIds } = useJobStore();
+  
+  const displayJobs = useMemo(() => {
+    if (bulkTailorJobIds && bulkTailorJobIds.length > 0) {
+      return jobs.filter((j) => bulkTailorJobIds.includes(j.id));
+    }
+    return jobs.filter((j) => j.status === "saved");
+  }, [jobs, bulkTailorJobIds]);
+
+  const savedJobs = displayJobs;
 
   const {
     masterResume,
@@ -51,6 +59,16 @@ export function TailorPanel() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [copySuccessId, setCopySuccessId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+
+  // Auto-trigger tailoring if bulk selected jobs are set and master resume is available
+  useEffect(() => {
+    if (bulkTailorJobIds && bulkTailorJobIds.length > 0 && masterResume && !isGenerating) {
+      const timer = setTimeout(() => {
+        handleTailorAll();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [bulkTailorJobIds, masterResume]);
 
   // Load master resume from electron store on mount
   useEffect(() => {
@@ -205,13 +223,13 @@ export function TailorPanel() {
       return;
     }
 
-    // Only tailor jobs that don't already have a resume/cover letter
-    const jobsToProcess = savedJobs.filter(
-      (j) => !j.tailoredResumeText || !j.coverLetterText,
-    );
+    // If bulk selection is active, process all of them. Otherwise process pending saved jobs.
+    const jobsToProcess = bulkTailorJobIds && bulkTailorJobIds.length > 0
+      ? savedJobs
+      : savedJobs.filter((j) => !j.tailoredResumeText || !j.coverLetterText);
 
     if (jobsToProcess.length === 0) {
-      alert("All saved jobs are already tailored!");
+      alert("No jobs to process!");
       return;
     }
 
@@ -230,6 +248,7 @@ export function TailorPanel() {
     } finally {
       setIsGenerating(false);
       setActiveJobId(null);
+      setBulkTailorJobIds([]);
     }
   };
 
@@ -486,7 +505,7 @@ export function TailorPanel() {
             onClick={handleTailorAll}
             disabled={isGenerating || savedJobs.length === 0 || !masterResume}
           >
-            Tailor All
+            {bulkTailorJobIds && bulkTailorJobIds.length > 0 ? "Tailor Selected" : "Tailor All"}
           </button>
         </div>
       </div>
@@ -496,6 +515,22 @@ export function TailorPanel() {
         <div className="js-error-card" style={{ marginBottom: "24px" }}>
           <span>⚠️</span>
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Bulk selection banner */}
+      {bulkTailorJobIds && bulkTailorJobIds.length > 0 && (
+        <div className="flex items-center justify-between p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-slate-200 text-xs mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <span className="flex items-center gap-2 font-medium">
+            <Sparkles className="w-4.5 h-4.5 text-indigo-400 animate-pulse" />
+            Showing {bulkTailorJobIds.length} job(s) selected for bulk tailoring.
+          </span>
+          <button
+            onClick={() => setBulkTailorJobIds([])}
+            className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-300 transition-colors text-xs font-semibold cursor-pointer"
+          >
+            Show All Saved Jobs
+          </button>
         </div>
       )}
 
@@ -511,8 +546,9 @@ export function TailorPanel() {
             }}
           >
             <p>
-              No saved jobs found. Search for jobs and save them to see them
-              here.
+              {bulkTailorJobIds && bulkTailorJobIds.length > 0
+                ? "No matching selected jobs found."
+                : "No saved jobs found. Search for jobs and save them to see them here."}
             </p>
           </div>
         ) : (

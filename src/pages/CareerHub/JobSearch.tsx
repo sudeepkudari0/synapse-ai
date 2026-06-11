@@ -2,12 +2,50 @@ import { useState, useEffect } from 'react';
 import { useJobStore } from '../../career/state/career-store';
 import { useNavigationStore } from '../../state/navigation-store';
 import type { Job } from '../../career/core/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/Select';
+import { MultiSelect } from '../../components/ui/MultiSelect';
 
 const JOB_BOARDS = [
   { id: 'linkedin', name: 'LinkedIn', icon: '💼' },
   { id: 'indeed', name: 'Indeed', icon: '🔍' },
   { id: 'glassdoor', name: 'Glassdoor', icon: '🚪' },
   { id: 'zip_recruiter', name: 'ZipRecruiter', icon: '⚡' },
+  { id: 'naukri', name: 'Naukri', icon: '🇮🇳' },
+];
+
+const JOB_TYPES = [
+  { value: '', label: 'Any Type' },
+  { value: 'fulltime', label: 'Full Time' },
+  { value: 'parttime', label: 'Part Time' },
+  { value: 'internship', label: 'Internship' },
+  { value: 'contract', label: 'Contract' },
+];
+
+const HOURS_OLD_OPTIONS = [
+  { value: 24, label: 'Past 24 hours' },
+  { value: 72, label: 'Past 3 days' },
+  { value: 168, label: 'Past week' },
+  { value: 720, label: 'Past month' },
+];
+
+const COUNTRIES = [
+  { value: 'usa', label: '🇺🇸 USA' },
+  { value: 'india', label: '🇮🇳 India' },
+  { value: 'uk', label: '🇬🇧 UK' },
+  { value: 'canada', label: '🇨🇦 Canada' },
+  { value: 'germany', label: '🇩🇪 Germany' },
+  { value: 'australia', label: '🇦🇺 Australia' },
+  { value: 'singapore', label: '🇸🇬 Singapore' },
+  { value: 'france', label: '🇫🇷 France' },
+  { value: 'netherlands', label: '🇳🇱 Netherlands' },
+  { value: 'japan', label: '🇯🇵 Japan' },
+  { value: 'united arab emirates', label: '🇦🇪 UAE' },
 ];
 
 const IT_JOBS = [
@@ -30,20 +68,7 @@ const IT_JOBS = [
   'System Administrator'
 ];
 
-const IT_LOCATIONS = [
-  'Bangalore',
-  'Hyderabad',
-  'Pune',
-  'Noida',
-  'Chennai',
-  'Gurgaon',
-  'Mumbai',
-  'Delhi',
-  'Kolkata',
-  'Ahmedabad',
-  'Kochi',
-  'Remote'
-];
+
 
 interface SearchableDropdownProps {
   label: string;
@@ -181,10 +206,16 @@ export function JobSearch() {
   const { jobs: savedJobs, addJob } = useJobStore();
   
   const [query, setQuery] = useState('');
-  const [location, setLocation] = useState('');
   const [selectedBoards, setSelectedBoards] = useState<string[]>(['linkedin', 'indeed']);
   const [isRemote, setIsRemote] = useState(false);
   const [maxResults, setMaxResults] = useState(15);
+  const [jobType, setJobType] = useState('');
+  const [hoursOld, setHoursOld] = useState(72);
+  const [easyApply, setEasyApply] = useState(false);
+  const [distance, setDistance] = useState(50);
+  const [country, setCountry] = useState('usa');
+  const [linkedinFetchDesc, setLinkedinFetchDesc] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,11 +245,7 @@ export function JobSearch() {
     }
   }, []);
 
-  const toggleBoard = (id: string) => {
-    setSelectedBoards((prev) =>
-      prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]
-    );
-  };
+
 
   const handleSearch = async () => {
     setLoading(true);
@@ -251,12 +278,20 @@ export function JobSearch() {
     });
 
     try {
+      // Use country display name as location for the scraper
+      const countryLabel = COUNTRIES.find(c => c.value === country)?.label?.replace(/^[^\w]*/, '').trim() || country;
       const response = await (window as any).electronAPI.careerHub.runJobspy({
         query,
-        location,
+        location: countryLabel,
         sites: selectedBoards.join(','),
         remote: isRemote,
-        results: maxResults
+        results: maxResults,
+        hours: hoursOld,
+        jobType: jobType || undefined,
+        easyApply: easyApply || undefined,
+        distance,
+        country,
+        linkedinFetchDescription: linkedinFetchDesc || undefined,
       });
 
       if (response.success) {
@@ -370,26 +405,28 @@ export function JobSearch() {
             disabled={loading}
           />
 
-          <SearchableDropdown
-            label="Location"
-            placeholder="e.g. Bangalore, Hyderabad"
-            value={location}
-            onChange={setLocation}
-            options={IT_LOCATIONS}
-            disabled={loading}
-          />
+          <div className="js-input-wrapper">
+            <label>Country / Region</label>
+            <Select value={country} onValueChange={setCountry} disabled={loading}>
+              <SelectTrigger className="js-input-modern" style={{ width: '100%' }}>
+                <SelectValue placeholder="Select Country" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="js-boards-grid">
-            {JOB_BOARDS.map((board) => (
-              <button
-                key={board.id}
-                className={`js-board-btn ${selectedBoards.includes(board.id) ? 'active' : ''}`}
-                onClick={() => toggleBoard(board.id)}
-                disabled={loading}
-              >
-                <span>{board.icon}</span> {board.name}
-              </button>
-            ))}
+            <MultiSelect
+              options={JOB_BOARDS}
+              selected={selectedBoards}
+              onChange={setSelectedBoards}
+              placeholder="Select Job Boards"
+              disabled={loading}
+            />
             
             <button
               className={`js-board-btn ${isRemote ? 'active' : ''}`}
@@ -400,25 +437,117 @@ export function JobSearch() {
               🏠 Remote Only
             </button>
             
-            <select
-              className="js-input-modern"
-              value={maxResults}
-              onChange={(e) => setMaxResults(Number(e.target.value))}
+            <Select
+              value={String(maxResults)}
+              onValueChange={(val) => setMaxResults(Number(val))}
               disabled={loading}
-              style={{ padding: '8px 12px', fontSize: '13px' }}
             >
-              <option value={15}>15 Results</option>
-              <option value={30}>30 Results</option>
-              <option value={50}>50 Results</option>
-            </select>
+              <SelectTrigger className="js-board-btn h-10 w-full justify-between text-slate-300 font-medium">
+                <SelectValue placeholder="Max Results" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="15">15 Results</SelectItem>
+                <SelectItem value="30">30 Results</SelectItem>
+                <SelectItem value="50">50 Results</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <button
+              type="button"
+              className={`js-board-btn`}
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              disabled={loading}
+              style={{ color: showAdvanced ? '#a5b4fc' : '#64748b', borderColor: showAdvanced ? 'rgba(99, 102, 241, 0.3)' : undefined, height: '40px' }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showAdvanced ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', marginRight: '6px' }}>
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+              Filters
+            </button>
           </div>
 
+          {/* Advanced Filters - full width row */}
+          {showAdvanced && (
+            <div className="js-boards-grid" style={{ gap: '8px' }}>
+              <Select
+                value={jobType || 'any'}
+                onValueChange={(val) => setJobType(val === 'any' ? '' : val)}
+                disabled={loading}
+              >
+                <SelectTrigger className="js-board-btn h-10 w-full justify-between text-slate-300 font-medium">
+                  <SelectValue placeholder="Job Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {JOB_TYPES.map((jt) => (
+                    <SelectItem key={jt.value} value={jt.value || 'any'}>
+                      {jt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={String(hoursOld)}
+                onValueChange={(val) => setHoursOld(Number(val))}
+                disabled={loading}
+              >
+                <SelectTrigger className="js-board-btn h-10 w-full justify-between text-slate-300 font-medium">
+                  <SelectValue placeholder="Age of Listing" />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOURS_OLD_OPTIONS.map((h) => (
+                    <SelectItem key={h.value} value={String(h.value)}>
+                      {h.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+
+              <Select
+                value={String(distance)}
+                onValueChange={(val) => setDistance(Number(val))}
+                disabled={loading}
+              >
+                <SelectTrigger className="js-board-btn h-10 w-full justify-between text-slate-300 font-medium">
+                  <SelectValue placeholder="Distance" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">📏 10 mi</SelectItem>
+                  <SelectItem value="25">📏 25 mi</SelectItem>
+                  <SelectItem value="50">📏 50 mi</SelectItem>
+                  <SelectItem value="100">📏 100 mi</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <button type="button" disabled={loading}
+                className={`js-board-btn ${easyApply ? 'active' : ''}`}
+                onClick={() => setEasyApply(!easyApply)}
+                style={{ height: '40px' }}
+              >
+                ⚡ Easy Apply
+              </button>
+
+              {selectedBoards.includes('linkedin') && (
+                <button type="button" disabled={loading}
+                  className={`js-board-btn ${linkedinFetchDesc ? 'active' : ''}`}
+                  onClick={() => setLinkedinFetchDesc(!linkedinFetchDesc)}
+                  style={{
+                    height: '40px',
+                    ...(linkedinFetchDesc ? { background: 'rgba(56, 189, 248, 0.15)', borderColor: 'rgba(56, 189, 248, 0.5)', color: '#38bdf8' } : {})
+                  }}
+                >
+                  📄 Full Desc
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="js-search-action">
             <button 
               className="js-btn-primary" 
               onClick={handleSearch}
-              disabled={loading || !query.trim() || !location.trim() || selectedBoards.length === 0}
+              disabled={loading || !query.trim() || selectedBoards.length === 0}
             >
               {loading ? 'Searching...' : '🚀 Fetch Jobs'}
             </button>
@@ -477,13 +606,51 @@ export function JobSearch() {
                         🏠 Remote
                       </span>
                     )}
+                    {job.job_type && (
+                      <span className="js-result-tag" style={{ color: '#c084fc', borderColor: 'rgba(192, 132, 252, 0.3)' }}>
+                        💼 {job.job_type}
+                      </span>
+                    )}
+                    {job.job_level && (
+                      <span className="js-result-tag" style={{ color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}>
+                        📊 {job.job_level}
+                      </span>
+                    )}
+                    {job.experience_range && (
+                      <span className="js-result-tag" style={{ color: '#fb923c', borderColor: 'rgba(251, 146, 60, 0.3)' }}>
+                        🧑‍💻 {job.experience_range}
+                      </span>
+                    )}
                     {(job.min_amount || job.max_amount) && (
                       <span className="js-result-tag" style={{ color: '#fbbf24', borderColor: 'rgba(251, 191, 36, 0.3)' }}>
                         💰 {job.currency || '$'}{job.min_amount ? Math.round(job.min_amount).toLocaleString() : ''} 
                         {job.max_amount ? ` - ${Math.round(job.max_amount).toLocaleString()}` : ''}
                       </span>
                     )}
+                    {job.date_posted && (
+                      <span className="js-result-tag" style={{ color: '#94a3b8', borderColor: 'rgba(148, 163, 184, 0.2)' }}>
+                        📅 {job.date_posted}
+                      </span>
+                    )}
                   </div>
+                  {job.skills && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                      {job.skills.split(',').slice(0, 5).map((skill: string, si: number) => (
+                        <span key={si} style={{
+                          fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
+                          background: 'rgba(99, 102, 241, 0.1)', color: '#a5b4fc',
+                          border: '1px solid rgba(99, 102, 241, 0.15)',
+                        }}>
+                          {skill.trim()}
+                        </span>
+                      ))}
+                      {job.skills.split(',').length > 5 && (
+                        <span style={{ fontSize: '10px', color: '#64748b', padding: '2px 4px' }}>
+                          +{job.skills.split(',').length - 5} more
+                        </span>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="js-result-spacer"></div>
                   

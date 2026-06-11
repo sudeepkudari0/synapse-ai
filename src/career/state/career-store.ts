@@ -13,6 +13,7 @@ interface JobStore {
   selectedJobId: string | null;
   searchQuery: string;
   statusFilter: JobStatus | 'all';
+  bulkTailorJobIds: string[];
 
   // Actions
   setJobs: (jobs: Job[]) => void;
@@ -24,6 +25,7 @@ interface JobStore {
   setStatusFilter: (filter: JobStatus | 'all') => void;
   getFilteredJobs: () => Job[];
   getJobsByStatus: (status: JobStatus) => Job[];
+  setBulkTailorJobIds: (ids: string[]) => void;
 }
 
 export const useJobStore = create<JobStore>((set, get) => ({
@@ -31,6 +33,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
   selectedJobId: null,
   searchQuery: '',
   statusFilter: 'all',
+  bulkTailorJobIds: [],
 
   setJobs: (jobs) => set({ jobs }),
   addJob: (job) => set((state) => ({ jobs: [job, ...state.jobs] })),
@@ -46,6 +49,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
   setSelectedJob: (id) => set({ selectedJobId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setStatusFilter: (filter) => set({ statusFilter: filter }),
+  setBulkTailorJobIds: (ids) => set({ bulkTailorJobIds: ids }),
 
   getFilteredJobs: () => {
     const { jobs, searchQuery, statusFilter } = get();

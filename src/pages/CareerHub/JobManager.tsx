@@ -2,7 +2,7 @@
  * Job Manager — Save, view, and manage jobs
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useJobStore } from "../../career/state/career-store";
 import type { Job, JobStatus } from "../../career/core/types";
 import { useNavigationStore } from "@/state/navigation-store";
@@ -46,11 +46,81 @@ export function JobManager() {
     updateJob,
     removeJob,
     getFilteredJobs,
+    setBulkTailorJobIds,
   } = useJobStore();
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
+  // Selection states
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Clear selection on filter changes
+  useEffect(() => {
+    setRowSelection({});
+  }, [statusFilter]);
+
   const filteredJobs = getFilteredJobs();
+
+  const selectedJobIds = useMemo(() => {
+    return Object.keys(rowSelection).filter((id) => rowSelection[id]);
+  }, [rowSelection]);
+
+  const selectedJobs = useMemo(() => {
+    return jobs.filter((j) => selectedJobIds.includes(j.id));
+  }, [jobs, selectedJobIds]);
+
+  const handleBulkStatusChange = (newStatus: JobStatus) => {
+    if (selectedJobIds.length === 0) return;
+    
+    selectedJobIds.forEach((id) => {
+      updateJob(id, { status: newStatus });
+    });
+    
+    const updatedJobs = jobs.map((j) =>
+      selectedJobIds.includes(j.id)
+        ? { ...j, status: newStatus, updatedAt: new Date().toISOString() }
+        : j
+    );
+    (window as any).electronAPI?.careerHub?.saveJobs?.(updatedJobs);
+    
+    setRowSelection({});
+  };
+
+  const handleBulkOpenInBrowser = () => {
+    selectedJobs.forEach((job) => {
+      if (job.url) {
+        if ((window as any).electronAPI?.openExternal) {
+          (window as any).electronAPI.openExternal(job.url);
+        } else {
+          window.open(job.url, "_blank");
+        }
+      }
+    });
+  };
+
+  const handleBulkTailor = () => {
+    if (selectedJobIds.length === 0) return;
+    
+    setBulkTailorJobIds(selectedJobIds);
+    
+    const navStore = useNavigationStore.getState();
+    navStore.setCareerTab("tailor");
+    
+    setRowSelection({});
+  };
+
+  const handleBulkDelete = () => {
+    selectedJobIds.forEach((id) => {
+      removeJob(id);
+    });
+    
+    const updatedJobs = jobs.filter((j) => !selectedJobIds.includes(j.id));
+    (window as any).electronAPI?.careerHub?.saveJobs?.(updatedJobs);
+    
+    setRowSelection({});
+    setShowDeleteConfirm(false);
+  };
 
   const handleAddJob = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -391,6 +461,182 @@ export function JobManager() {
         </form>
       )}
 
+      {/* Bulk Actions Panel */}
+      {selectedJobIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-indigo-500/10 border border-indigo-500/25 rounded-2xl mb-4 animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="flex items-center gap-3">
+            <span className="px-2.5 py-1 text-xs font-semibold bg-indigo-500 text-white rounded-lg">
+              {selectedJobIds.length} Selected
+            </span>
+            <button
+              onClick={() => setRowSelection({})}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              Clear selection
+            </button>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Change Dropdown */}
+            <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-300">
+              <span className="text-slate-400">Status:</span>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBulkStatusChange(e.target.value as JobStatus);
+                  }
+                }}
+                className="bg-transparent border-none p-0 text-indigo-400 focus:outline-none focus:ring-0 cursor-pointer font-medium"
+              >
+                <option value="" disabled className="bg-[#0f1117] text-slate-500 font-semibold">Change status...</option>
+                {STATUS_OPTIONS.filter((o) => o.value !== "all").map((opt) => (
+                  <option
+                    key={opt.value}
+                    value={opt.value}
+                    className="bg-[#0f1117] text-slate-300 font-semibold"
+                  >
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Open in Browser */}
+            <button
+              onClick={handleBulkOpenInBrowser}
+              disabled={!selectedJobs.some((j) => j.url)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Open all selected URLs in browser"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+              <span>Open Links</span>
+            </button>
+
+            {/* Tailor Resume */}
+            <button
+              onClick={handleBulkTailor}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 transition-all cursor-pointer"
+              title="Tailor resumes for selected jobs"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Tailor CV</span>
+            </button>
+
+            {/* Delete */}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 transition-all cursor-pointer"
+              title="Delete selected jobs"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal Overlay */}
+      {showDeleteConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: "#1e1e2e",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: "12px",
+              padding: "24px",
+              maxWidth: "400px",
+              width: "100%",
+              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+              textAlign: "center",
+            }}
+          >
+            <h3
+              style={{
+                color: "#f87171",
+                marginTop: 0,
+                marginBottom: "12px",
+                fontSize: "18px",
+              }}
+            >
+              ⚠️ Delete Selected Jobs?
+            </h3>
+            <p
+              style={{
+                color: "#a6adc8",
+                fontSize: "14px",
+                lineHeight: "1.5",
+                marginBottom: "24px",
+              }}
+            >
+              Are you sure you want to permanently delete the {selectedJobIds.length} selected job(s)? This action cannot be undone.
+            </p>
+            <div
+              style={{ display: "flex", gap: "12px", justifyContent: "center" }}
+            >
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  color: "#cdd6f4",
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background =
+                    "rgba(255, 255, 255, 0.05)")
+                }
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                style={{
+                  background: "#ef4444",
+                  border: "none",
+                  color: "#ffffff",
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "#dc2626")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "#ef4444")
+                }
+              >
+                Yes, Delete Jobs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Job List */}
       <div className="jm-list">
         {filteredJobs.length === 0 ? (
@@ -407,6 +653,9 @@ export function JobManager() {
             data={filteredJobs}
             expandedRowId={expandedJobId}
             renderExpandedRow={renderExpandedRow}
+            enableSelection={true}
+            rowSelection={rowSelection}
+            onRowSelectionChange={setRowSelection}
           />
         )}
       </div>
